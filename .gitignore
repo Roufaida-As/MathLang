@@ -1,0 +1,136 @@
+# ============================================
+# .gitignore pour MathLang Compiler
+# ============================================
+
+# Fichiers générés par Flex
+lex.yy.c
+lex.yy.h
+
+# Fichiers générés par Bison (pour plus tard)
+*.tab.c
+*.tab.h
+y.tab.c
+y.tab.h
+
+# Exécutables
+mathlang
+*.exe
+*.out
+a.out
+
+# Fichiers objets
+*.o
+*.obj
+*.lo
+*.slo
+*.ko
+*.elf
+
+# Bibliothèques
+*.lib
+*.a
+*.la
+*.so
+*.so.*
+*.dylib
+*.dll
+
+# Fichiers de débogage
+*.dSYM/
+*.su
+*.idb
+*.pdb
+
+# Fichiers générés par Make
+.deps/
+.libs/
+
+# Répertoires de build
+build/
+bin/
+obj/
+out/
+
+# Fichiers temporaires
+*~
+*.swp
+*.swo
+*.bak
+*.tmp
+.*.sw?
+
+# Fichiers de configuration IDE
+.vscode/
+.idea/
+*.code-workspace
+.clangd/
+.cache/
+
+# Visual Studio
+*.vcxproj
+*.vcxproj.filters
+*.vcxproj.user
+*.sln
+.vs/
+
+# Eclipse
+.cproject
+.project
+.settings/
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Linux
+*~
+.fuse_hidden*
+.directory
+.Trash-*
+
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+*.stackdump
+[Dd]esktop.ini
+
+# Logs
+*.log
+error.log
+debug.log
+
+# Core dumps
+core
+core.*
+vgcore.*
+
+# Valgrind
+vgcore.*
+*.memcheck
+
+# Fichiers de test personnalisés (optionnel)
+# tests/custom_*.ml
+
+# Couverture de code
+*.gcov
+*.gcda
+*.gcno
+*.gcna
+
+# Documentation générée
+docs/html/
+docs/latex/
+
+# Compressed files
+*.zip
+*.tar
+*.tar.gz
+*.tgz
+*.rar
+
+# Backup files
+*.backup
+*_backup
