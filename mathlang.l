@@ -80,33 +80,120 @@ NEWLINE     \n
 /* === DÉLIMITEURS === */
 /* === SYMBOLES SPÉCIAUX === */
 
+/* 3. Littéraux, Identificateurs, Gestion Erreurs */
 
-/* ============================================ */
-/* SECTION PERSONNE C                          */
-/* Littéraux, Identificateurs, Gestion Erreurs */
-/* ============================================ */
-/* 
- * TODO PERSONNE C : Ajouter vos règles ici
- * 
- * ORDRE CRUCIAL pour les nombres :
- *    1. Complexes (2+3i, 5i)
- *    2. Réels avec notation scientifique (2.5e-3)
- *    3. Réels simples (3.14)
- *    4. Entiers (42)
- * 
- * Sinon "2+3i" sera reconnu comme "2", "+", "3", "i" !
- */
+/* === COMMENTAIRES === */
+"#".*                          { update_position(); /* Commentaire ignoré */ }
+
+/* === ESPACES BLANCS === */
+{WHITESPACE}+                  { update_position(); /* Ignoré */ }
+
+/* === NOUVELLES LIGNES === */
+{NEWLINE}+                     { handle_newline(); }
 
 /* === NOMBRES COMPLEXES === */
+
+{DIGIT}+\.{DIGIT}+([eE][+-]?{DIGIT}+)?i   { 
+    yylval.strval = strdup(yytext); 
+    update_position();
+    return TOK_COMPLEX; 
+}
+{DIGIT}+[eE][+-]?{DIGIT}+i                { 
+    yylval.strval = strdup(yytext); 
+    update_position();
+    return TOK_COMPLEX; 
+}
+{DIGIT}+\.([eE][+-]?{DIGIT}+)?i           { 
+    yylval.strval = strdup(yytext); 
+    update_position();
+    return TOK_COMPLEX; 
+}
+\.{DIGIT}+([eE][+-]?{DIGIT}+)?i           { 
+    yylval.strval = strdup(yytext); 
+    update_position();
+    return TOK_COMPLEX; 
+}
+{DIGIT}+i                                  { 
+    yylval.strval = strdup(yytext); 
+    update_position();
+    return TOK_COMPLEX; 
+}
+
 /* === NOMBRES RÉELS === */
+
+{DIGIT}+\.{DIGIT}+([eE][+-]?{DIGIT}+)?    { 
+    yylval.floatval = atof(yytext); 
+    update_position();
+    return TOK_FLOAT; 
+}
+{DIGIT}+[eE][+-]?{DIGIT}+                 { 
+    yylval.floatval = atof(yytext); 
+    update_position();
+    return TOK_FLOAT; 
+}
+{DIGIT}+\.([eE][+-]?{DIGIT}+)?            { 
+    yylval.floatval = atof(yytext); 
+    update_position();
+    return TOK_FLOAT; 
+}
+\.{DIGIT}+([eE][+-]?{DIGIT}+)?            { 
+    yylval.floatval = atof(yytext); 
+    update_position();
+    return TOK_FLOAT; 
+}
+
 /* === NOMBRES ENTIERS === */
+
+{DIGIT}+                                   { 
+    yylval.intval = atoi(yytext); 
+    update_position();
+    return TOK_INT; 
+}
+
 /* === CHAÎNES DE CARACTÈRES === */
+
+\"([^\"\\]|\\.)*\"                         { 
+    yylval.strval = strdup(yytext); 
+    update_position();
+    return TOK_STRING; 
+}
+
 /* === CARACTÈRES === */
+
+\'([^\'\\]|\\.)\'                          { 
+    /* Gestion des caractères échappés */
+    if (yytext[1] == '\\') {
+        switch(yytext[2]) {
+            case 'n':  yylval.charval = '\n'; break;
+            case 't':  yylval.charval = '\t'; break;
+            case 'r':  yylval.charval = '\r'; break;
+            case '\\': yylval.charval = '\\'; break;
+            case '\'': yylval.charval = '\''; break;
+            case '0':  yylval.charval = '\0'; break;
+            default:   yylval.charval = yytext[2]; break;
+        }
+    } else {
+        yylval.charval = yytext[1];
+    }
+    update_position();
+    return TOK_CHAR; 
+}
+
 /* === IDENTIFICATEURS === */
-/* === COMMENTAIRES === */
-/* === ESPACES BLANCS === */
-/* === NOUVELLES LIGNES === */
+
+{ID_START}{ID_CHAR}{0,62}                  { 
+    yylval.strval = strdup(yytext); 
+    update_position();
+    return TOK_ID; 
+}
+
 /* === GESTION DES ERREURS === */
+.                                          { 
+    fprintf(stderr, "ERREUR LEXICALE ligne %d, col %d: caractère non reconnu '%s'\n", 
+            line_num, col_num, yytext);
+    update_position();
+    return TOK_ERROR; 
+}
 
 
 
