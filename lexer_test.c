@@ -288,7 +288,7 @@ int main(int argc, char **argv)
             printf("Accepted: %s at line %d, col %d\n",
                    token_name(token),
                    line_num,
-                   col_num - yyleng); // <-- adjust column
+                   col_num - yyleng);
         }
         else
         {

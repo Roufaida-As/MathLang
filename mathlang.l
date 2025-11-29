@@ -36,90 +36,54 @@ ID_CHAR     [a-zA-Z0-9_]
 WHITESPACE  [ \t\r]
 NEWLINE     \n
 
-
-
-/* ============================================ */
-/* SECTION PERSONNE A                          */
-/* Mots-clés, Structures de Contrôle, Types    */
-/* ============================================ */
-/* 
- * TODO PERSONNE A : Ajouter vos règles ici
- * 
- * Exemples à implémenter :
- * "SOIT"      { update_position(); return TOK_SOIT; }
- */
-
-/* === DÉCLARATIONS === */
-/* === STRUCTURES DE CONTRÔLE === */
-/* === CONTRÔLE DE FLUX === */
-/* === ENTRÉES/SORTIES === */
-/* === FONCTIONS === */
-/* === BOOLÉENS === */
-/* === OPÉRATEURS LOGIQUES TEXTUELS === */
-/* === TYPES DE BASE === */
-/* === SOUS-TYPES === */
-
-
-/* ============================================ */
-/* SECTION PERSONNE B                          */
-/* Opérateurs et Symboles                      */
-/* ============================================ */
-/* 
- * TODO PERSONNE B : Ajouter vos règles ici
- * 
- * Exemples à implémenter :
- * "<-"        { update_position(); return TOK_ASSIGN; }
- * "!="        { update_position(); return TOK_NEQ; }
- */
-
-/* === AFFECTATION === */
-/* === OPÉRATEURS ARITHMÉTIQUES === */
-/* === OPÉRATEURS DE COMPARAISON === */
-/* === OPÉRATEURS ENSEMBLISTES === */
-/* === OPÉRATEURS D'APPARTENANCE === */
-/* === DÉLIMITEURS === */
-/* === SYMBOLES SPÉCIAUX === */
-
-
-/* ============================================ */
-/* SECTION PERSONNE C                          */
-/* Littéraux, Identificateurs, Gestion Erreurs */
-/* ============================================ */
-/* 
- * TODO PERSONNE C : Ajouter vos règles ici
- * 
- * ORDRE CRUCIAL pour les nombres :
- *    1. Complexes (2+3i, 5i)
- *    2. Réels avec notation scientifique (2.5e-3)
- *    3. Réels simples (3.14)
- *    4. Entiers (42)
- * 
- * Sinon "2+3i" sera reconnu comme "2", "+", "3", "i" !
- */
-
-/* === NOMBRES COMPLEXES === */
-/* === NOMBRES RÉELS === */
-/* === NOMBRES ENTIERS === */
-/* === CHAÎNES DE CARACTÈRES === */
-/* === CARACTÈRES === */
-/* === IDENTIFICATEURS === */
-/* === COMMENTAIRES === */
-/* === ESPACES BLANCS === */
-/* === NOUVELLES LIGNES === */
-/* === GESTION DES ERREURS === */
-
-
-
-
-/* ============================================ */
-/* RÈGLE TEMPORAIRE POUR TESTER                */
-/* (À SUPPRIMER une fois les sections remplies) */
-/* ============================================ */
 %%
-"SOIT"      { update_position(); return TOK_SOIT; }
+"<=>"       { update_position(); return TOK_EQUIV; }
+
+"<-"        { update_position(); return TOK_ASSIGN; }
+"->"        { update_position(); return TOK_ARROW; }
+"=>"        { update_position(); return TOK_IMPLIES; }
+
+"!="        { update_position(); return TOK_NEQ; }
+"<="        { update_position(); return TOK_LEQ; }
+">="        { update_position(); return TOK_GEQ; }
+
+"="         { update_position(); return TOK_EQ; }
+"<"         { update_position(); return TOK_LT; }
+">"         { update_position(); return TOK_GT; }
+
+"+"         { update_position(); return TOK_PLUS; }
+"-"         { update_position(); return TOK_MINUS; }
+"*"         { update_position(); return TOK_MULT; }
+"/"         { update_position(); return TOK_DIV_REAL; }
+"^"         { update_position(); return TOK_POWER; }
+
+"div"       { update_position(); return TOK_DIV; }
+"mod"       { update_position(); return TOK_MOD; }
+
+"union"     { update_position(); return TOK_UNION; }
+"inter"     { update_position(); return TOK_INTER; }
+"diff"      { update_position(); return TOK_DIFF; }
+"\\"         { update_position(); return TOK_DIFF; }
+"symdiff"   { update_position(); return TOK_SYMDIFF; }
+
+"inclus"    { update_position(); return TOK_SUBSET; }
+"strict_inclus" { update_position(); return TOK_STRICT_SUBSET; }
+
+"("         { update_position(); return TOK_LPAREN; }
+")"         { update_position(); return TOK_RPAREN; }
+"["         { update_position(); return TOK_LBRACKET; }
+"]"         { update_position(); return TOK_RBRACKET; }
+"{"         { update_position(); return TOK_LBRACE; }
+"}"         { update_position(); return TOK_RBRACE; }
+","         { update_position(); return TOK_COMMA; }
+":"         { update_position(); return TOK_COLON; }
+"."         { update_position(); return TOK_DOT; }
+"|"         { update_position(); return TOK_PIPE; }
+";"         { update_position(); return TOK_SEMICOLON; }
+
+{WHITESPACE}+   { update_position(); }
+{NEWLINE}       { handle_newline(); }
 .   { 
-    fprintf(stderr, "ERREUR LEXICALE ligne %d, col %d: caractère non reconnu '%s'\n", 
-            line_num, col_num, yytext);
     update_position();
     return TOK_ERROR;
 }
