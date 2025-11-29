@@ -81,8 +81,114 @@ NEWLINE     \n
 "|"         { update_position(); return TOK_PIPE; }
 ";"         { update_position(); return TOK_SEMICOLON; }
 
+
+
+"#".*                          { update_position();  }
+
+
+{DIGIT}+\.{DIGIT}+([eE][+-]?{DIGIT}+)?i   { 
+    yylval.strval = strdup(yytext); 
+    update_position();
+    return TOK_COMPLEX; 
+}
+
+{DIGIT}+[eE][+-]?{DIGIT}+i                { 
+    yylval.strval = strdup(yytext); 
+    update_position();
+    return TOK_COMPLEX; 
+}
+
+{DIGIT}+\.([eE][+-]?{DIGIT}+)?i           { 
+    yylval.strval = strdup(yytext); 
+    update_position();
+    return TOK_COMPLEX; 
+}
+
+\.{DIGIT}+([eE][+-]?{DIGIT}+)?i           { 
+    yylval.strval = strdup(yytext); 
+    update_position();
+    return TOK_COMPLEX; 
+}
+
+{DIGIT}+i                                  { 
+    yylval.strval = strdup(yytext); 
+    update_position();
+    return TOK_COMPLEX; 
+}
+
+
+
+{DIGIT}+\.{DIGIT}+([eE][+-]?{DIGIT}+)?    { 
+    yylval.floatval = atof(yytext); 
+    update_position();
+    return TOK_FLOAT; 
+}
+{DIGIT}+[eE][+-]?{DIGIT}+                 { 
+    yylval.floatval = atof(yytext); 
+    update_position();
+    return TOK_FLOAT; 
+}
+{DIGIT}+\.([eE][+-]?{DIGIT}+)?            { 
+    yylval.floatval = atof(yytext); 
+    update_position();
+    return TOK_FLOAT; 
+}
+\.{DIGIT}+([eE][+-]?{DIGIT}+)?            { 
+    yylval.floatval = atof(yytext); 
+    update_position();
+    return TOK_FLOAT; 
+}
+
+
+
+{DIGIT}+                                   { 
+    yylval.intval = atoi(yytext); 
+    update_position();
+    return TOK_INT; 
+}
+
+
+
+\"([^\"\\]|\\.)*\"                         { 
+    yylval.strval = strdup(yytext); 
+    update_position();
+    return TOK_STRING; 
+}
+
+
+
+\'([^\'\\]|\\.)\'                          { 
+    /* Gestion des caractères échappés */
+    if (yytext[1] == '\\') {
+        switch(yytext[2]) {
+            case 'n':  yylval.charval = '\n'; break;
+            case 't':  yylval.charval = '\t'; break;
+            case 'r':  yylval.charval = '\r'; break;
+            case '\\': yylval.charval = '\\'; break;
+            case '\'': yylval.charval = '\''; break;
+            case '0':  yylval.charval = '\0'; break;
+            default:   yylval.charval = yytext[2]; break;
+        }
+    } else {
+        yylval.charval = yytext[1];
+    }
+    update_position();
+    return TOK_CHAR; 
+}
+
+
+
+{ID_START}{ID_CHAR}{0,62}                  { 
+    yylval.strval = strdup(yytext); 
+    update_position();
+    return TOK_ID; 
+}
+
+
 {WHITESPACE}+   { update_position(); }
 {NEWLINE}       { handle_newline(); }
+
+
 .   { 
     update_position();
     return TOK_ERROR;
