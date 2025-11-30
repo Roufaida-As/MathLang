@@ -37,66 +37,59 @@ WHITESPACE  [ \t\r]
 NEWLINE     \n
 
 %%
-/* ============================================ */
-/* SECTION 3 : RÈGLES D'ANALYSE LEXICALE       */
-/* ============================================ */
 
-/* --------------------MOTS-CLÉS -------------------- */
-
-/* Mots-clés de déclaration */
 "SOIT"              { update_position(); return TOK_SOIT; }
 "SOIT_CONST"        { update_position(); return TOK_SOIT_CONST; }
 "tel"[ \t]+"que"    { update_position(); return TOK_TEL_QUE; }
 "TYPE"              { update_position(); return TOK_TYPE; }
 "ENREGISTREMENT"    { update_position(); return TOK_ENREGISTREMENT; }
 
-/* Structures de contrôle - SI/ALORS/SINON */
+
 "SI"                { update_position(); return TOK_SI; }
 "ALORS"             { update_position(); return TOK_ALORS; }
 "SINON"             { update_position(); return TOK_SINON; }
 "FIN"               { update_position(); return TOK_FIN; }
 
-/* Structures de contrôle - TANT QUE */
+
 "TANT"              { update_position(); return TOK_TANT; }
 "QUE"               { update_position(); return TOK_QUE; }
 "FAIRE"             { update_position(); return TOK_FAIRE; }
 
-/* Structures de contrôle - POUR */
+
 "POUR"              { update_position(); return TOK_POUR; }
 "DE"                { update_position(); return TOK_DE; }
 "A"                 { update_position(); return TOK_A; }
 "PAR"               { update_position(); return TOK_PAR; }
 
-/* Structures de contrôle - REPETER */
+
 "REPETER"           { update_position(); return TOK_REPETER; }
 "JUSQU'A"           { update_position(); return TOK_JUSQUA; }
 
-/* Contrôle de flux */
+
 "SORTIR"            { update_position(); return TOK_SORTIR; }
 "CONTINUER"         { update_position(); return TOK_CONTINUER; }
 
-/* Entrées/Sorties */
+
 "AFFICHER"          { update_position(); return TOK_AFFICHER; }
 "AFFICHER_LIGNE"    { update_position(); return TOK_AFFICHER_LIGNE; }
 "LIRE"              { update_position(); return TOK_LIRE; }
 
-/* Fonctions et procédures */
+
 "FONCTION"          { update_position(); return TOK_FONCTION; }
 "PROCEDURE"         { update_position(); return TOK_PROCEDURE; }
 "RETOURNER"         { update_position(); return TOK_RETOURNER; }
 "lambda"            { update_position(); return TOK_LAMBDA; }
 
-/* Booléens */
 "vrai"              { update_position(); return TOK_TRUE; }
 "faux"              { update_position(); return TOK_FALSE; }
 
-/* Opérateurs logiques textuels */
+
 "et"                { update_position(); return TOK_AND; }
 "ou"                { update_position(); return TOK_OR; }
 "non"               { update_position(); return TOK_NOT; }
 "xor"               { update_position(); return TOK_XOR; }
 
-/* Types de base */
+
 "Z"                 { update_position(); return TOK_TYPE_Z; }
 "R"                 { update_position(); return TOK_TYPE_R; }
 "B"                 { update_position(); return TOK_TYPE_B; }
@@ -104,7 +97,6 @@ NEWLINE     \n
 "Sigma"             { update_position(); return TOK_TYPE_SIGMA; }
 "Char"              { update_position(); return TOK_TYPE_CHAR; }
 
-/* Sous-types numériques */
 "int8"              { update_position(); return TOK_INT8; }
 "int16"             { update_position(); return TOK_INT16; }
 "int32"             { update_position(); return TOK_INT32; }
@@ -112,12 +104,10 @@ NEWLINE     \n
 "float"             { update_position(); return TOK_FLOAT_TYPE; }
 "double"            { update_position(); return TOK_DOUBLE_TYPE; }
 
-/* Mots-clés DANS/dans (IMPORTANT: accepter les DEUX selon rapport) */
 "DANS"              { update_position(); return TOK_IN; }
 "dans"              { update_position(); return TOK_IN; }
 
 
-/* --------------------OPÉRATEURS -------------------- */
 
 "<=>"       { update_position(); return TOK_EQUIV; }
 
@@ -164,12 +154,10 @@ NEWLINE     \n
 ";"         { update_position(); return TOK_SEMICOLON; }
 
 
-/* -------------------- LITTÉRAUX -------------------- */
 
-/* Commentaires */
 "#".*       { update_position(); }
 
-/* Nombres complexes */
+
 {DIGIT}+\.{DIGIT}+([eE][+-]?{DIGIT}+)?i   { 
     yylval.strval = strdup(yytext); 
     update_position();
@@ -200,7 +188,7 @@ NEWLINE     \n
     return TOK_COMPLEX; 
 }
 
-/* Nombres réels */
+
 {DIGIT}+\.{DIGIT}+([eE][+-]?{DIGIT}+)?    { 
     yylval.floatval = atof(yytext); 
     update_position();
@@ -222,21 +210,21 @@ NEWLINE     \n
     return TOK_FLOAT; 
 }
 
-/* Nombres entiers */
+
 {DIGIT}+                                   { 
     yylval.intval = atoi(yytext); 
     update_position();
     return TOK_INT; 
 }
 
-/* Chaînes de caractères */
+
 \"([^\"\\]|\\.)*\"                         { 
     yylval.strval = strdup(yytext); 
     update_position();
     return TOK_STRING; 
 }
 
-/* Caractères */
+
 \'([^\'\\]|\\.)\'                          { 
     /* Gestion des caractères échappés */
     if (yytext[1] == '\\') {
@@ -256,18 +244,17 @@ NEWLINE     \n
     return TOK_CHAR; 
 }
 
-/* Identificateurs (EN DERNIER car pattern général) */
+
 {ID_START}{ID_CHAR}{0,62}                  { 
     yylval.strval = strdup(yytext); 
     update_position();
     return TOK_ID; 
 }
 
-/* Espaces blancs */
 {WHITESPACE}+   { update_position(); }
 {NEWLINE}       { handle_newline(); }
 
-/* Gestion d'erreurs (catchall) */
+
 .   { 
     update_position();
     return TOK_ERROR;
