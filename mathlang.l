@@ -5,17 +5,18 @@
 #include "tokens.h"
 
 int line_num = 1;
-int col_num = 1;
+int col_num  = 1;
 
 void update_position() { col_num += yyleng; }
-void handle_newline() { line_num++; col_num = 1; }
+void handle_newline()  { line_num++; col_num = 1; }
 %}
 
+/* Options */
 %option noyywrap
-%option yylineno
+%option case-insensitive
 
+/* Macros */
 DIGIT       [0-9]
-LETTER      [a-zA-Z]
 ID_START    [a-zA-Z_]
 ID_CHAR     [a-zA-Z0-9_]
 WHITESPACE  [ \t\r]
@@ -44,7 +45,7 @@ NEWLINE     \n
 "PAR"       { update_position(); return TOK_PAR; }
 
 "REPETER"   { update_position(); return TOK_REPETER; }
-"JUSQU'A"   { update_position(); return TOK_JUSQUA; }
+[Jj][Uu][Ss][Qq][Uu]['’][Aa] { update_position(); return TOK_JUSQUA; }
 
 "SORTIR"    { update_position(); return TOK_SORTIR; }
 "CONTINUER" { update_position(); return TOK_CONTINUER; }
@@ -56,7 +57,7 @@ NEWLINE     \n
 "FONCTION"   { update_position(); return TOK_FONCTION; }
 "PROCEDURE"  { update_position(); return TOK_PROCEDURE; }
 "RETOURNER"  { update_position(); return TOK_RETOURNER; }
-"lambda"     { update_position(); return TOK_LAMBDA; }
+"LAMBDA"     { update_position(); return TOK_LAMBDA; }
 
 "vrai"   { update_position(); return TOK_TRUE; }
 "faux"   { update_position(); return TOK_FALSE; }
@@ -95,8 +96,8 @@ NEWLINE     \n
 "booleen"  { update_position(); return TOK_BOOLEEN; }
 "chaine"   { update_position(); return TOK_CHAINE; }
 
-"Re"   { update_position(); return TOK_RE; }
-"Im"   { update_position(); return TOK_IM; }
+"re"   { update_position(); return TOK_RE; }
+"im"   { update_position(); return TOK_IM; }
 "arg"  { update_position(); return TOK_ARG; }
 
 "majuscules"   { update_position(); return TOK_MAJUSCULES; }
@@ -108,13 +109,13 @@ NEWLINE     \n
 "trace"      { update_position(); return TOK_TRACE; }
 "identite"   { update_position(); return TOK_IDENTITE; }
 
-"DANS"|"dans" { update_position(); return TOK_IN; }
-
-"union"     { update_position(); return TOK_UNION; }
-"inter"     { update_position(); return TOK_INTER; }
+"dans"        { update_position(); return TOK_IN; }
+"/∈"|"notin"  { update_position(); return TOK_NOT_IN; }
+"union"       { update_position(); return TOK_UNION; }
+"inter"       { update_position(); return TOK_INTER; }
 "diff"|"\\\\" { update_position(); return TOK_DIFF; }
-"symdiff"   { update_position(); return TOK_SYMDIFF; }
-"inclus"    { update_position(); return TOK_SUBSET; }
+"symdiff"     { update_position(); return TOK_SYMDIFF; }
+"inclus"      { update_position(); return TOK_SUBSET; }
 "strict_inclus" { update_position(); return TOK_STRICT_SUBSET; }
 
 "<=>" { update_position(); return TOK_EQUIV; }
@@ -128,27 +129,27 @@ NEWLINE     \n
 "<"   { update_position(); return TOK_LT; }
 ">"   { update_position(); return TOK_GT; }
 
-"+" { update_position(); return TOK_PLUS; }
-"-" { update_position(); return TOK_MINUS; }
-"*" { update_position(); return TOK_MULT; }
-"/" { update_position(); return TOK_DIV_REAL; }
-"^" { update_position(); return TOK_POWER; }
+"+"   { update_position(); return TOK_PLUS; }
+"-"   { update_position(); return TOK_MINUS; }
+"*"   { update_position(); return TOK_MULT; }
+"/"   { update_position(); return TOK_DIV_REAL; }
 "div" { update_position(); return TOK_DIV; }
 "mod" { update_position(); return TOK_MOD; }
+"^"   { update_position(); return TOK_POWER; }
 
-"(" { return TOK_LPAREN; }
-")" { return TOK_RPAREN; }
-"[" { return TOK_LBRACKET; }
-"]" { return TOK_RBRACKET; }
-"{" { return TOK_LBRACE; }
-"}" { return TOK_RBRACE; }
-"," { return TOK_COMMA; }
-":" { return TOK_COLON; }
-"." { return TOK_DOT; }
-"|" { return TOK_PIPE; }
-";" { return TOK_SEMICOLON; }
+"(" { update_position(); return TOK_LPAREN; }
+")" { update_position(); return TOK_RPAREN; }
+"[" { update_position(); return TOK_LBRACKET; }
+"]" { update_position(); return TOK_RBRACKET; }
+"{" { update_position(); return TOK_LBRACE; }
+"}" { update_position(); return TOK_RBRACE; }
+"," { update_position(); return TOK_COMMA; }
+":" { update_position(); return TOK_COLON; }
+"." { update_position(); return TOK_DOT; }
+"|" { update_position(); return TOK_PIPE; }
+";" { update_position(); return TOK_SEMICOLON; }
 
-"#".*   { update_position(); }
+"#".* { update_position(); }
 
 {DIGIT}+\.{DIGIT}+([eE][+-]?{DIGIT}+)?i |
 {DIGIT}+[eE][+-]?{DIGIT}+i |
@@ -181,26 +182,25 @@ NEWLINE     \n
     return TOK_STRING;
 }
 
-\'([^\'\\]|\\.)\'                          { 
-    /* Gestion des caractères échappés */
+\'([^\'\\]|\\.)\' {
     if (yytext[1] == '\\') {
-        switch(yytext[2]) {
+        switch (yytext[2]) {
             case 'n':  yylval.charval = '\n'; break;
             case 't':  yylval.charval = '\t'; break;
             case 'r':  yylval.charval = '\r'; break;
             case '\\': yylval.charval = '\\'; break;
             case '\'': yylval.charval = '\''; break;
             case '0':  yylval.charval = '\0'; break;
-            default:   yylval.charval = yytext[2]; break;
+            default:   yylval.charval = yytext[2];
         }
     } else {
         yylval.charval = yytext[1];
     }
     update_position();
-    return TOK_CHAR; 
+    return TOK_CHAR;
 }
 
-{ID_START}({ID_CHAR}){0,62} {
+{ID_START}{ID_CHAR}{0,62} {
     yylval.strval = strdup(yytext);
     update_position();
     return TOK_ID;
