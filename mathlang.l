@@ -4,31 +4,16 @@
 #include <string.h>
 #include "tokens.h"
 
-/* Variables globales pour le tracking */
 int line_num = 1;
 int col_num = 1;
 
-/* Fonction pour mettre à jour la position dans le fichier */
-void update_position() {
-    col_num += yyleng;
-}
-
-/* Fonction pour gérer les nouvelles lignes */
-void handle_newline() {
-    line_num++;
-    col_num = 1;
-}
+void update_position() { col_num += yyleng; }
+void handle_newline() { line_num++; col_num = 1; }
 %}
 
-/* ============================================ */
-/* OPTIONS FLEX                                */
-/* ============================================ */
 %option noyywrap
 %option yylineno
 
-/* ============================================ */
-/* DÉFINITIONS DE PATTERNS RÉUTILISABLES       */
-/* ============================================ */
 DIGIT       [0-9]
 LETTER      [a-zA-Z]
 ID_START    [a-zA-Z_]
@@ -36,172 +21,6 @@ ID_CHAR     [a-zA-Z0-9_]
 WHITESPACE  [ \t\r]
 NEWLINE     \n
 
-
-
-/* ============================================ */
-/* SECTION PERSONNE A                          */
-/* Mots-clés, Structures de Contrôle, Types    */
-/* ============================================ */
-/* 
- * TODO PERSONNE A : Ajouter vos règles ici
- * 
- * Exemples à implémenter :
- * "SOIT"      { update_position(); return TOK_SOIT; }
- */
-
-/* === DÉCLARATIONS === */
-/* === STRUCTURES DE CONTRÔLE === */
-/* === CONTRÔLE DE FLUX === */
-/* === ENTRÉES/SORTIES === */
-/* === FONCTIONS === */
-/* === BOOLÉENS === */
-/* === OPÉRATEURS LOGIQUES TEXTUELS === */
-/* === TYPES DE BASE === */
-/* === SOUS-TYPES === */
-
-
-/* ============================================ */
-/* SECTION PERSONNE B                          */
-/* Opérateurs et Symboles                      */
-/* ============================================ */
-/* 
- * TODO PERSONNE B : Ajouter vos règles ici
- * 
- * Exemples à implémenter :
- * "<-"        { update_position(); return TOK_ASSIGN; }
- * "!="        { update_position(); return TOK_NEQ; }
- */
-
-/* === AFFECTATION === */
-/* === OPÉRATEURS ARITHMÉTIQUES === */
-/* === OPÉRATEURS DE COMPARAISON === */
-/* === OPÉRATEURS ENSEMBLISTES === */
-/* === OPÉRATEURS D'APPARTENANCE === */
-/* === DÉLIMITEURS === */
-/* === SYMBOLES SPÉCIAUX === */
-
-/* 3. Littéraux, Identificateurs, Gestion Erreurs */
-
-/* === COMMENTAIRES === */
-"#".*                          { update_position(); /* Commentaire ignoré */ }
-
-/* === ESPACES BLANCS === */
-{WHITESPACE}+                  { update_position(); /* Ignoré */ }
-
-/* === NOUVELLES LIGNES === */
-{NEWLINE}+                     { handle_newline(); }
-
-/* === NOMBRES COMPLEXES === */
-
-{DIGIT}+\.{DIGIT}+([eE][+-]?{DIGIT}+)?i   { 
-    yylval.strval = strdup(yytext); 
-    update_position();
-    return TOK_COMPLEX; 
-}
-{DIGIT}+[eE][+-]?{DIGIT}+i                { 
-    yylval.strval = strdup(yytext); 
-    update_position();
-    return TOK_COMPLEX; 
-}
-{DIGIT}+\.([eE][+-]?{DIGIT}+)?i           { 
-    yylval.strval = strdup(yytext); 
-    update_position();
-    return TOK_COMPLEX; 
-}
-\.{DIGIT}+([eE][+-]?{DIGIT}+)?i           { 
-    yylval.strval = strdup(yytext); 
-    update_position();
-    return TOK_COMPLEX; 
-}
-{DIGIT}+i                                  { 
-    yylval.strval = strdup(yytext); 
-    update_position();
-    return TOK_COMPLEX; 
-}
-
-/* === NOMBRES RÉELS === */
-
-{DIGIT}+\.{DIGIT}+([eE][+-]?{DIGIT}+)?    { 
-    yylval.floatval = atof(yytext); 
-    update_position();
-    return TOK_FLOAT; 
-}
-{DIGIT}+[eE][+-]?{DIGIT}+                 { 
-    yylval.floatval = atof(yytext); 
-    update_position();
-    return TOK_FLOAT; 
-}
-{DIGIT}+\.([eE][+-]?{DIGIT}+)?            { 
-    yylval.floatval = atof(yytext); 
-    update_position();
-    return TOK_FLOAT; 
-}
-\.{DIGIT}+([eE][+-]?{DIGIT}+)?            { 
-    yylval.floatval = atof(yytext); 
-    update_position();
-    return TOK_FLOAT; 
-}
-
-/* === NOMBRES ENTIERS === */
-
-{DIGIT}+                                   { 
-    yylval.intval = atoi(yytext); 
-    update_position();
-    return TOK_INT; 
-}
-
-/* === CHAÎNES DE CARACTÈRES === */
-
-\"([^\"\\]|\\.)*\"                         { 
-    yylval.strval = strdup(yytext); 
-    update_position();
-    return TOK_STRING; 
-}
-
-/* === CARACTÈRES === */
-
-\'([^\'\\]|\\.)\'                          { 
-    /* Gestion des caractères échappés */
-    if (yytext[1] == '\\') {
-        switch(yytext[2]) {
-            case 'n':  yylval.charval = '\n'; break;
-            case 't':  yylval.charval = '\t'; break;
-            case 'r':  yylval.charval = '\r'; break;
-            case '\\': yylval.charval = '\\'; break;
-            case '\'': yylval.charval = '\''; break;
-            case '0':  yylval.charval = '\0'; break;
-            default:   yylval.charval = yytext[2]; break;
-        }
-    } else {
-        yylval.charval = yytext[1];
-    }
-    update_position();
-    return TOK_CHAR; 
-}
-
-/* === IDENTIFICATEURS === */
-
-{ID_START}{ID_CHAR}{0,62}                  { 
-    yylval.strval = strdup(yytext); 
-    update_position();
-    return TOK_ID; 
-}
-
-/* === GESTION DES ERREURS === */
-.                                          { 
-    fprintf(stderr, "ERREUR LEXICALE ligne %d, col %d: caractère non reconnu '%s'\n", 
-            line_num, col_num, yytext);
-    update_position();
-    return TOK_ERROR; 
-}
-
-
-
-
-/* ============================================ */
-/* RÈGLE TEMPORAIRE POUR TESTER                */
-/* (À SUPPRIMER une fois les sections remplies) */
-/* ============================================ */
 %%
 
 "SOIT"              { update_position(); return TOK_SOIT; }
@@ -210,186 +29,157 @@ NEWLINE     \n
 "TYPE"              { update_position(); return TOK_TYPE; }
 "ENREGISTREMENT"    { update_position(); return TOK_ENREGISTREMENT; }
 
+"SI"        { update_position(); return TOK_SI; }
+"ALORS"     { update_position(); return TOK_ALORS; }
+"SINON"     { update_position(); return TOK_SINON; }
+"FIN"       { update_position(); return TOK_FIN; }
 
-"SI"                { update_position(); return TOK_SI; }
-"ALORS"             { update_position(); return TOK_ALORS; }
-"SINON"             { update_position(); return TOK_SINON; }
-"FIN"               { update_position(); return TOK_FIN; }
+"TANT"      { update_position(); return TOK_TANT; }
+"QUE"       { update_position(); return TOK_QUE; }
+"FAIRE"     { update_position(); return TOK_FAIRE; }
 
+"POUR"      { update_position(); return TOK_POUR; }
+"DE"        { update_position(); return TOK_DE; }
+"A"         { update_position(); return TOK_A; }
+"PAR"       { update_position(); return TOK_PAR; }
 
-"TANT"              { update_position(); return TOK_TANT; }
-"QUE"               { update_position(); return TOK_QUE; }
-"FAIRE"             { update_position(); return TOK_FAIRE; }
+"REPETER"   { update_position(); return TOK_REPETER; }
+"JUSQU'A"   { update_position(); return TOK_JUSQUA; }
 
+"SORTIR"    { update_position(); return TOK_SORTIR; }
+"CONTINUER" { update_position(); return TOK_CONTINUER; }
 
-"POUR"              { update_position(); return TOK_POUR; }
-"DE"                { update_position(); return TOK_DE; }
-"A"                 { update_position(); return TOK_A; }
-"PAR"               { update_position(); return TOK_PAR; }
+"AFFICHER"        { update_position(); return TOK_AFFICHER; }
+"AFFICHER_LIGNE"  { update_position(); return TOK_AFFICHER_LIGNE; }
+"LIRE"            { update_position(); return TOK_LIRE; }
 
+"FONCTION"   { update_position(); return TOK_FONCTION; }
+"PROCEDURE"  { update_position(); return TOK_PROCEDURE; }
+"RETOURNER"  { update_position(); return TOK_RETOURNER; }
+"lambda"     { update_position(); return TOK_LAMBDA; }
 
-"REPETER"           { update_position(); return TOK_REPETER; }
-"JUSQU'A"           { update_position(); return TOK_JUSQUA; }
+"vrai"   { update_position(); return TOK_TRUE; }
+"faux"   { update_position(); return TOK_FALSE; }
 
+"et"   { update_position(); return TOK_AND; }
+"ou"   { update_position(); return TOK_OR; }
+"non"  { update_position(); return TOK_NOT; }
+"xor"  { update_position(); return TOK_XOR; }
 
-"SORTIR"            { update_position(); return TOK_SORTIR; }
-"CONTINUER"         { update_position(); return TOK_CONTINUER; }
+"Z"      { update_position(); return TOK_TYPE_Z; }
+"R"      { update_position(); return TOK_TYPE_R; }
+"B"      { update_position(); return TOK_TYPE_B; }
+"C"      { update_position(); return TOK_TYPE_C; }
+"Sigma"  { update_position(); return TOK_TYPE_SIGMA; }
+"Char"   { update_position(); return TOK_TYPE_CHAR; }
 
+"int8"   { update_position(); return TOK_INT8; }
+"int16"  { update_position(); return TOK_INT16; }
+"int32"  { update_position(); return TOK_INT32; }
+"int64"  { update_position(); return TOK_INT64; }
+"float"  { update_position(); return TOK_FLOAT_TYPE; }
+"double" { update_position(); return TOK_DOUBLE_TYPE; }
 
-"AFFICHER"          { update_position(); return TOK_AFFICHER; }
-"AFFICHER_LIGNE"    { update_position(); return TOK_AFFICHER_LIGNE; }
-"LIRE"              { update_position(); return TOK_LIRE; }
+"sin"   { update_position(); return TOK_SIN; }
+"cos"   { update_position(); return TOK_COS; }
+"exp"   { update_position(); return TOK_EXP; }
+"log"   { update_position(); return TOK_LOG; }
+"sqrt"  { update_position(); return TOK_SQRT; }
+"abs"   { update_position(); return TOK_ABS; }
+"floor" { update_position(); return TOK_FLOOR; }
+"ceil"  { update_position(); return TOK_CEIL; }
+"round" { update_position(); return TOK_ROUND; }
 
+"int"      { update_position(); return TOK_INT_FUNC; }
+"reel"     { update_position(); return TOK_REEL; }
+"booleen"  { update_position(); return TOK_BOOLEEN; }
+"chaine"   { update_position(); return TOK_CHAINE; }
 
-"FONCTION"          { update_position(); return TOK_FONCTION; }
-"PROCEDURE"         { update_position(); return TOK_PROCEDURE; }
-"RETOURNER"         { update_position(); return TOK_RETOURNER; }
-"lambda"            { update_position(); return TOK_LAMBDA; }
+"Re"   { update_position(); return TOK_RE; }
+"Im"   { update_position(); return TOK_IM; }
+"arg"  { update_position(); return TOK_ARG; }
 
-"vrai"              { update_position(); return TOK_TRUE; }
-"faux"              { update_position(); return TOK_FALSE; }
+"majuscules"   { update_position(); return TOK_MAJUSCULES; }
+"minuscules"  { update_position(); return TOK_MINUSCULES; }
+"diviser"     { update_position(); return TOK_DIVISER; }
 
+"det"        { update_position(); return TOK_DET; }
+"inv"        { update_position(); return TOK_INV; }
+"trace"      { update_position(); return TOK_TRACE; }
+"identite"   { update_position(); return TOK_IDENTITE; }
 
-"et"                { update_position(); return TOK_AND; }
-"ou"                { update_position(); return TOK_OR; }
-"non"               { update_position(); return TOK_NOT; }
-"xor"               { update_position(); return TOK_XOR; }
-
-
-"Z"                 { update_position(); return TOK_TYPE_Z; }
-"R"                 { update_position(); return TOK_TYPE_R; }
-"B"                 { update_position(); return TOK_TYPE_B; }
-"C"                 { update_position(); return TOK_TYPE_C; }
-"Sigma"             { update_position(); return TOK_TYPE_SIGMA; }
-"Char"              { update_position(); return TOK_TYPE_CHAR; }
-
-"int8"              { update_position(); return TOK_INT8; }
-"int16"             { update_position(); return TOK_INT16; }
-"int32"             { update_position(); return TOK_INT32; }
-"int64"             { update_position(); return TOK_INT64; }
-"float"             { update_position(); return TOK_FLOAT_TYPE; }
-"double"            { update_position(); return TOK_DOUBLE_TYPE; }
-
-"DANS"              { update_position(); return TOK_IN; }
-"dans"              { update_position(); return TOK_IN; }
-
-
-
-"<=>"       { update_position(); return TOK_EQUIV; }
-
-"<-"        { update_position(); return TOK_ASSIGN; }
-"->"        { update_position(); return TOK_ARROW; }
-"=>"        { update_position(); return TOK_IMPLIES; }
-
-"!="        { update_position(); return TOK_NEQ; }
-"<="        { update_position(); return TOK_LEQ; }
-">="        { update_position(); return TOK_GEQ; }
-
-"="         { update_position(); return TOK_EQ; }
-"<"         { update_position(); return TOK_LT; }
-">"         { update_position(); return TOK_GT; }
-
-"+"         { update_position(); return TOK_PLUS; }
-"-"         { update_position(); return TOK_MINUS; }
-"*"         { update_position(); return TOK_MULT; }
-"/"         { update_position(); return TOK_DIV_REAL; }
-"^"         { update_position(); return TOK_POWER; }
-
-"div"       { update_position(); return TOK_DIV; }
-"mod"       { update_position(); return TOK_MOD; }
+"DANS"|"dans" { update_position(); return TOK_IN; }
 
 "union"     { update_position(); return TOK_UNION; }
 "inter"     { update_position(); return TOK_INTER; }
-"diff"      { update_position(); return TOK_DIFF; }
-"\\"        { update_position(); return TOK_DIFF; }
+"diff"|"\\\\" { update_position(); return TOK_DIFF; }
 "symdiff"   { update_position(); return TOK_SYMDIFF; }
-
 "inclus"    { update_position(); return TOK_SUBSET; }
 "strict_inclus" { update_position(); return TOK_STRICT_SUBSET; }
 
-"("         { update_position(); return TOK_LPAREN; }
-")"         { update_position(); return TOK_RPAREN; }
-"["         { update_position(); return TOK_LBRACKET; }
-"]"         { update_position(); return TOK_RBRACKET; }
-"{"         { update_position(); return TOK_LBRACE; }
-"}"         { update_position(); return TOK_RBRACE; }
-","         { update_position(); return TOK_COMMA; }
-":"         { update_position(); return TOK_COLON; }
-"."         { update_position(); return TOK_DOT; }
-"|"         { update_position(); return TOK_PIPE; }
-";"         { update_position(); return TOK_SEMICOLON; }
+"<=>" { update_position(); return TOK_EQUIV; }
+"<-"  { update_position(); return TOK_ASSIGN; }
+"->"  { update_position(); return TOK_ARROW; }
+"=>"  { update_position(); return TOK_IMPLIES; }
+"!="  { update_position(); return TOK_NEQ; }
+"<="  { update_position(); return TOK_LEQ; }
+">="  { update_position(); return TOK_GEQ; }
+"="   { update_position(); return TOK_EQ; }
+"<"   { update_position(); return TOK_LT; }
+">"   { update_position(); return TOK_GT; }
 
+"+" { update_position(); return TOK_PLUS; }
+"-" { update_position(); return TOK_MINUS; }
+"*" { update_position(); return TOK_MULT; }
+"/" { update_position(); return TOK_DIV_REAL; }
+"^" { update_position(); return TOK_POWER; }
+"div" { update_position(); return TOK_DIV; }
+"mod" { update_position(); return TOK_MOD; }
 
+"(" { return TOK_LPAREN; }
+")" { return TOK_RPAREN; }
+"[" { return TOK_LBRACKET; }
+"]" { return TOK_RBRACKET; }
+"{" { return TOK_LBRACE; }
+"}" { return TOK_RBRACE; }
+"," { return TOK_COMMA; }
+":" { return TOK_COLON; }
+"." { return TOK_DOT; }
+"|" { return TOK_PIPE; }
+";" { return TOK_SEMICOLON; }
 
-"#".*       { update_position(); }
+"#".*   { update_position(); }
 
-
-{DIGIT}+\.{DIGIT}+([eE][+-]?{DIGIT}+)?i   { 
-    yylval.strval = strdup(yytext); 
+{DIGIT}+\.{DIGIT}+([eE][+-]?{DIGIT}+)?i |
+{DIGIT}+[eE][+-]?{DIGIT}+i |
+{DIGIT}+\.([eE][+-]?{DIGIT}+)?i |
+\.{DIGIT}+([eE][+-]?{DIGIT}+)?i |
+{DIGIT}+i {
+    yylval.strval = strdup(yytext);
     update_position();
-    return TOK_COMPLEX; 
+    return TOK_COMPLEX;
 }
 
-{DIGIT}+[eE][+-]?{DIGIT}+i                { 
-    yylval.strval = strdup(yytext); 
+{DIGIT}+\.{DIGIT}+([eE][+-]?{DIGIT}+)? |
+{DIGIT}+[eE][+-]?{DIGIT}+ |
+{DIGIT}+\. |
+\.{DIGIT}+ {
+    yylval.floatval = atof(yytext);
     update_position();
-    return TOK_COMPLEX; 
+    return TOK_FLOAT;
 }
 
-{DIGIT}+\.([eE][+-]?{DIGIT}+)?i           { 
-    yylval.strval = strdup(yytext); 
+{DIGIT}+ {
+    yylval.intval = atoi(yytext);
     update_position();
-    return TOK_COMPLEX; 
+    return TOK_INT;
 }
 
-\.{DIGIT}+([eE][+-]?{DIGIT}+)?i           { 
-    yylval.strval = strdup(yytext); 
+\"([^\"\\]|\\.)*\" {
+    yylval.strval = strdup(yytext);
     update_position();
-    return TOK_COMPLEX; 
+    return TOK_STRING;
 }
-
-{DIGIT}+i                                  { 
-    yylval.strval = strdup(yytext); 
-    update_position();
-    return TOK_COMPLEX; 
-}
-
-
-{DIGIT}+\.{DIGIT}+([eE][+-]?{DIGIT}+)?    { 
-    yylval.floatval = atof(yytext); 
-    update_position();
-    return TOK_FLOAT; 
-}
-{DIGIT}+[eE][+-]?{DIGIT}+                 { 
-    yylval.floatval = atof(yytext); 
-    update_position();
-    return TOK_FLOAT; 
-}
-{DIGIT}+\.([eE][+-]?{DIGIT}+)?            { 
-    yylval.floatval = atof(yytext); 
-    update_position();
-    return TOK_FLOAT; 
-}
-\.{DIGIT}+([eE][+-]?{DIGIT}+)?            { 
-    yylval.floatval = atof(yytext); 
-    update_position();
-    return TOK_FLOAT; 
-}
-
-
-{DIGIT}+                                   { 
-    yylval.intval = atoi(yytext); 
-    update_position();
-    return TOK_INT; 
-}
-
-
-\"([^\"\\]|\\.)*\"                         { 
-    yylval.strval = strdup(yytext); 
-    update_position();
-    return TOK_STRING; 
-}
-
 
 \'([^\'\\]|\\.)\'                          { 
     /* Gestion des caractères échappés */
@@ -410,18 +200,16 @@ NEWLINE     \n
     return TOK_CHAR; 
 }
 
-
-{ID_START}{ID_CHAR}{0,62}                  { 
-    yylval.strval = strdup(yytext); 
+{ID_START}({ID_CHAR}){0,62} {
+    yylval.strval = strdup(yytext);
     update_position();
-    return TOK_ID; 
+    return TOK_ID;
 }
 
-{WHITESPACE}+   { update_position(); }
-{NEWLINE}       { handle_newline(); }
+{WHITESPACE}+ { update_position(); }
+{NEWLINE}     { handle_newline(); }
 
-
-.   { 
+. {
     update_position();
     return TOK_ERROR;
 }
