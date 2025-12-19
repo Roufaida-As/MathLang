@@ -248,6 +248,52 @@ const char *token_name(int token)
         return "SQRT";
     case TOK_ABS:
         return "ABS";
+    case TOK_EXP:
+        return "EXP";
+    case TOK_LOG:
+        return "LOG";
+    case TOK_FLOOR:
+        return "FLOOR";
+    case TOK_CEIL:
+        return "CEIL";
+    case TOK_ROUND:
+        return "ROUND";
+
+    /* Fonctions de conversion */
+    case TOK_INT_FUNC:
+        return "INT_FUNC";
+    case TOK_REEL:
+        return "REEL";
+    case TOK_BOOLEEN:
+        return "BOOLEEN";
+    case TOK_CHAINE:
+        return "CHAINE";
+
+    /* Fonctions complexes */
+    case TOK_RE:
+        return "RE";
+    case TOK_IM:
+        return "IM";
+    case TOK_ARG:
+        return "ARG";
+
+    /* Fonctions sur chaînes */
+    case TOK_MAJUSCULES:
+        return "MAJUSCULES";
+    case TOK_MINUSCULES:
+        return "MINUSCULES";
+    case TOK_DIVISER:
+        return "DIVISER";
+
+    /* Fonctions matricielles */
+    case TOK_DET:
+        return "DET";
+    case TOK_INV:
+        return "INV";
+    case TOK_TRACE:
+        return "TRACE";
+    case TOK_IDENTITE:
+        return "IDENTITE";
 
     /* Spéciaux */
     case TOK_EOF:
