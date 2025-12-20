@@ -1,0 +1,13 @@
+cd /mnt/c/Users/rofa/Desktop/MathLang
+
+# 1. Générer le lexer avec Flex
+flex mathlang.l
+
+# 2. Compiler tout ensemble
+gcc lex.yy.c parser.c -o parser -lfl
+
+# 3. Tester
+./parser tests/test1.ml
+./parser tests/test2.ml
+./parser tests/test3.ml
+./parser tests/test4.ml

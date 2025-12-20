@@ -13,7 +13,6 @@ void handle_newline()  { line_num++; col_num = 1; }
 
 /* Options */
 %option noyywrap
-%option case-insensitive
 
 /* Macros */
 DIGIT       [0-9]
@@ -200,7 +199,7 @@ NEWLINE     \n
     return TOK_CHAR;
 }
 
-{ID_START}{ID_CHAR}{0,62} {
+{ID_START}{ID_CHAR}* {
     yylval.strval = strdup(yytext);
     update_position();
     return TOK_ID;
