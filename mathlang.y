@@ -282,26 +282,105 @@ void yyerror(const char *s) {
             line_num, col_num, s);
 }
 
+const char* token_name(int tok) {
+    switch (tok) {
+        case TOK_SOIT: return "TOK_SOIT";
+        case TOK_SOIT_CONST: return "TOK_SOIT_CONST";
+        case TOK_IN: return "TOK_IN";
+        case TOK_TEL_QUE: return "TOK_TEL_QUE";
+        case TOK_TYPE: return "TOK_TYPE";
+        case TOK_ENREGISTREMENT: return "TOK_ENREGISTREMENT";
+
+        case TOK_SI: return "TOK_SI";
+        case TOK_ALORS: return "TOK_ALORS";
+        case TOK_SINON: return "TOK_SINON";
+        case TOK_FIN: return "TOK_FIN";
+
+        case TOK_TANT: return "TOK_TANT";
+        case TOK_QUE: return "TOK_QUE";
+        case TOK_FAIRE: return "TOK_FAIRE";
+
+        case TOK_POUR: return "TOK_POUR";
+        case TOK_DE: return "TOK_DE";
+        case TOK_A: return "TOK_A";
+        case TOK_PAR: return "TOK_PAR";
+
+        case TOK_RETOURNER: return "TOK_RETOURNER";
+        case TOK_AFFICHER: return "TOK_AFFICHER";
+        case TOK_AFFICHER_LIGNE: return "TOK_AFFICHER_LIGNE";
+        case TOK_LIRE: return "TOK_LIRE";
+
+        case TOK_ID: return "TOK_ID";
+        case TOK_INT: return "TOK_INT";
+        case TOK_FLOAT: return "TOK_FLOAT";
+        case TOK_STRING: return "TOK_STRING";
+        case TOK_CHAR: return "TOK_CHAR";
+        case TOK_COMPLEX: return "TOK_COMPLEX";
+
+        case TOK_PLUS: return "TOK_PLUS";
+        case TOK_MINUS: return "TOK_MINUS";
+        case TOK_MULT: return "TOK_MULT";
+        case TOK_DIV_REAL: return "TOK_DIV_REAL";
+        case TOK_ASSIGN: return "TOK_ASSIGN";
+
+        case TOK_EQ: return "TOK_EQ";
+        case TOK_LT: return "TOK_LT";
+        case TOK_GT: return "TOK_GT";
+
+        case TOK_LPAREN: return "TOK_LPAREN";
+        case TOK_RPAREN: return "TOK_RPAREN";
+        case TOK_COMMA: return "TOK_COMMA";
+
+        default: return "TOKEN_INCONNU";
+    }
+}
+
+
 int main(int argc, char **argv) {
     extern FILE *yyin;
+    int tok;
 
     if (argc > 1) {
         yyin = fopen(argv[1], "r");
         if (!yyin) {
-            fprintf(stderr,
-                    "Erreur: impossible d'ouvrir le fichier %s\n", argv[1]);
+            fprintf(stderr, "Erreur: impossible d'ouvrir %s\n", argv[1]);
             return 1;
         }
     }
 
-    printf("=== Début de l'analyse syntaxique ===\n");
-    int result = yyparse();
+    printf("=== ANALYSE LEXICALE ===\n");
 
-    if (result == 0)
-        printf("=== Analyse syntaxique réussie ! ===\n");
-    else
-        printf("=== Analyse syntaxique échouée ===\n");
+    while ((tok = yylex()) != 0) {
+        printf(
+            "Ligne %d, Col %d : %-20s",
+            line_num,
+            col_num,
+            token_name(tok)
+        );
+
+        switch (tok) {
+            case TOK_ID:
+            case TOK_STRING:
+            case TOK_COMPLEX:
+                printf("  valeur = \"%s\"", yylval.strval);
+                break;
+
+            case TOK_INT:
+                printf("  valeur = %d", yylval.intval);
+                break;
+
+            case TOK_FLOAT:
+                printf("  valeur = %f", yylval.floatval);
+                break;
+
+            case TOK_CHAR:
+                printf("  valeur = '%c'", yylval.charval);
+                break;
+        }
+
+        printf("\n");
+    }
 
     if (argc > 1) fclose(yyin);
-    return result;
+    return 0;
 }
