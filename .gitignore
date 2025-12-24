@@ -12,7 +12,11 @@ lex.yy.h
 y.tab.c
 y.tab.h
 
+mathlang.output
 # Exécutables
+analyse_lexicale_manuelle
+Analyse_syntaxique_manuelle
+lexer_test
 mathlang
 parser
 *.exe

@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "tokens.h"
+#include "mathlang.tab.h"  // Using Bison's token definitions instead of tokens.h
 YYSTYPE yylval; 
 
 /* Variables globales */

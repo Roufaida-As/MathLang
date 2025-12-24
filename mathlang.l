@@ -2,7 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "tokens.h"
+#include "mathlang.tab.h"
 
 int line_num = 1;
 int col_num  = 1;
@@ -13,6 +13,8 @@ void handle_newline()  { line_num++; col_num = 1; }
 
 /* Options */
 %option noyywrap
+%option noinput
+%option nounput
 
 /* Macros */
 DIGIT       [0-9]
@@ -44,7 +46,7 @@ NEWLINE     \n
 "PAR"       { update_position(); return TOK_PAR; }
 
 "REPETER"   { update_position(); return TOK_REPETER; }
-[Jj][Uu][Ss][Qq][Uu]['’][Aa] { update_position(); return TOK_JUSQUA; }
+"JUSQUA" { update_position(); return TOK_JUSQUA; }
 
 "SORTIR"    { update_position(); return TOK_SORTIR; }
 "CONTINUER" { update_position(); return TOK_CONTINUER; }
@@ -209,8 +211,9 @@ NEWLINE     \n
 {NEWLINE}     { handle_newline(); }
 
 . {
+    fprintf(stderr, "Erreur lexicale à la ligne %d, colonne %d: caractère inconnu '%s'\n",
+            line_num, col_num, yytext);
     update_position();
-    return TOK_ERROR;
 }
 
 %%

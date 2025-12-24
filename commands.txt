@@ -1,13 +1,45 @@
 cd /mnt/c/Users/rofa/Desktop/MathLang
 
+
+voici les commandes pour tester l'analyse lexical manuelle :
+1- gcc Analyse_lexicale_manuelle.c -o analyse_lexicale_manuelle
+2- ./analyse_lexicale_manuelle
+
+
+
+voici les commandes pour tester l'analyse syntaxique manuelle : 
 # 1. Générer le lexer avec Flex
 flex mathlang.l
 
 # 2. Compiler tout ensemble
-gcc lex.yy.c parser.c -o parser -lfl
+gcc lex.yy.c Analyse_syntaxique_manuelle.c -o Analyse_syntaxique_manuelle -lfl
 
 # 3. Tester
+./Analyse_syntaxique_manuelle tests/test1.ml
+./Analyse_syntaxique_manuelle tests/test2.ml
+./Analyse_syntaxique_manuelle tests/test3.ml
+./Analyse_syntaxique_manuelle tests/test4.ml
+
+
+
+
+voici les commandes pour tester l'analyse syntaxique BISON : 
+# 1. Generate parser with Bison:
+bison -d -v mathlang.y
+
+--> Produces mathlang.tab.c and mathlang.tab.h
+
+# 2. Generate lexer with Flex:
+flex mathlang.l
+
+--> Produces lex.yy.c.
+
+# 3. Compile everything:
+gcc -Wall -g mathlang.tab.c lex.yy.c -o parser -lfl
+
+# 4.run tests
 ./parser tests/test1.ml
 ./parser tests/test2.ml
 ./parser tests/test3.ml
 ./parser tests/test4.ml
+./parser tests/test_parser.ml
