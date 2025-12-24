@@ -106,9 +106,225 @@ const char* token_name(int tok);
 
 %%
 
+/* ===================== */
+/* PROGRAMME             */
+/* ===================== */
 programme
-    : /* vide */
+    : liste_declarations
+    | /* vide */
     ;
+
+liste_declarations
+    : liste_declarations declaration
+    | declaration
+    ;
+
+declaration
+    : declaration_variable
+    | declaration_constante
+    | declaration_type
+    | declaration_fonction
+    | declaration_procedure
+    | instruction
+    ;
+
+/* ===================== */
+/* DÉCLARATIONS          */
+/* ===================== */
+declaration_variable
+    : TOK_SOIT TOK_ID TOK_IN type
+    | TOK_SOIT TOK_ID TOK_IN type TOK_TEL_QUE TOK_ID TOK_ASSIGN expression
+    ;
+
+declaration_constante
+    : TOK_SOIT_CONST TOK_ID TOK_IN type TOK_TEL_QUE TOK_ID TOK_ASSIGN expression
+    ;
+
+declaration_type
+    : TOK_TYPE TOK_ID TOK_EQ type
+    | TOK_TYPE TOK_ID TOK_EQ TOK_ENREGISTREMENT liste_champs TOK_FIN
+    ;
+
+liste_champs
+    : champ
+    | liste_champs champ
+    ;
+
+champ
+    : TOK_ID TOK_COLON type
+    ;
+
+/* ===================== */
+/* TYPES                 */
+/* ===================== */
+type
+    : type_arrow
+    ;
+
+type_arrow
+    : type_base
+    | type_base TOK_ARROW type_arrow
+    ;
+
+type_base
+    : TOK_TYPE_Z | TOK_TYPE_R | TOK_TYPE_B | TOK_TYPE_C
+    | TOK_TYPE_SIGMA | TOK_TYPE_CHAR
+    | TOK_INT8 | TOK_INT16 | TOK_INT32 | TOK_INT64
+    | TOK_FLOAT_TYPE | TOK_DOUBLE_TYPE
+    | TOK_ID
+    | TOK_LPAREN type TOK_RPAREN
+    ;
+
+/* ===================== */
+/* FONCTIONS             */
+/* ===================== */
+declaration_fonction
+    : TOK_FONCTION TOK_ID TOK_LPAREN TOK_RPAREN TOK_COLON type bloc TOK_FIN
+    | TOK_FONCTION TOK_ID TOK_LPAREN parametres TOK_RPAREN TOK_COLON type bloc TOK_FIN
+    ;
+
+declaration_procedure
+    : TOK_PROCEDURE TOK_ID TOK_LPAREN TOK_RPAREN bloc TOK_FIN
+    | TOK_PROCEDURE TOK_ID TOK_LPAREN parametres TOK_RPAREN bloc TOK_FIN
+    ;
+
+parametres
+    : parametre
+    | parametres TOK_COMMA parametre
+    ;
+
+parametre
+    : TOK_ID TOK_COLON type
+    ;
+
+/* ===================== */
+/* INSTRUCTIONS          */
+/* ===================== */
+bloc
+    : liste_instructions
+    | /* vide */
+    ;
+
+liste_instructions
+    : liste_instructions instruction
+    | instruction
+    ;
+
+instruction
+    : affectation
+    | instruction_si
+    | instruction_tant_que
+    | instruction_pour
+    | instruction_repeter
+    | instruction_io
+    | TOK_RETOURNER expression
+    | TOK_SORTIR
+    | TOK_CONTINUER
+    ;
+
+/* ===================== */
+/* AFFECTATION           */
+/* ===================== */
+affectation
+    : TOK_ID TOK_ASSIGN expression
+    ;
+
+/* ===================== */
+/* STRUCTURES            */
+/* ===================== */
+instruction_si
+    : TOK_SI expression TOK_ALORS bloc TOK_FIN
+    | TOK_SI expression TOK_ALORS bloc TOK_SINON bloc TOK_FIN
+    ;
+
+instruction_tant_que
+    : TOK_TANT TOK_QUE expression TOK_FAIRE bloc TOK_FIN
+    ;
+
+instruction_pour
+    : TOK_POUR TOK_ID TOK_DE expression TOK_A expression TOK_FAIRE bloc TOK_FIN
+    | TOK_POUR TOK_ID TOK_DE expression TOK_A expression TOK_PAR expression TOK_FAIRE bloc TOK_FIN
+    | TOK_POUR TOK_ID TOK_IN expression TOK_FAIRE bloc TOK_FIN
+    ;
+
+instruction_repeter
+    : TOK_REPETER bloc TOK_JUSQUA expression
+    ;
+
+/* ===================== */
+/* I/O                   */
+/* ===================== */
+instruction_io
+    : TOK_AFFICHER TOK_LPAREN liste_expressions TOK_RPAREN
+    | TOK_AFFICHER_LIGNE TOK_LPAREN liste_expressions TOK_RPAREN
+    | TOK_LIRE TOK_LPAREN TOK_ID TOK_RPAREN
+    ;
+
+liste_expressions
+    : expression
+    | liste_expressions TOK_COMMA expression
+    ;
+
+/* ===================== */
+/* EXPRESSIONS (SANS CONFLITS) */
+/* ===================== */
+
+expression
+    : expr_or
+    ;
+
+expr_or
+    : expr_or TOK_OR expr_xor
+    | expr_xor
+    ;
+
+expr_xor
+    : expr_xor TOK_XOR expr_and
+    | expr_and
+    ;
+
+expr_and
+    : expr_and TOK_AND expr_cmp
+    | expr_cmp
+    ;
+
+expr_cmp
+    : expr_cmp TOK_EQ expr_add
+    | expr_cmp TOK_LT expr_add
+    | expr_cmp TOK_GT expr_add
+    | expr_add
+    ;
+
+expr_add
+    : expr_add TOK_PLUS expr_mul
+    | expr_add TOK_MINUS expr_mul
+    | expr_mul
+    ;
+
+expr_mul
+    : expr_mul TOK_MULT expr_unary
+    | expr_mul TOK_DIV_REAL expr_unary
+    | expr_unary
+    ;
+
+expr_unary
+    : TOK_MINUS expr_unary %prec UMINUS
+    | TOK_NOT expr_unary
+    | primaire
+    ;
+
+primaire
+    : TOK_INT
+    | TOK_FLOAT
+    | TOK_STRING
+    | TOK_CHAR
+    | TOK_COMPLEX
+    | TOK_TRUE
+    | TOK_FALSE
+    | TOK_ID
+    | TOK_LPAREN expression TOK_RPAREN
+    ;
+
 
 %%
 
@@ -210,73 +426,75 @@ const char* token_name(int tok) {
 
 int main(int argc, char **argv) {
     extern FILE *yyin;
+    int tok;
 
-    if (argc < 3) {
-        fprintf(stderr,
-            "Usage : %s <fichier> <lex|parse>\n", argv[0]);
+    if (argc < 2) {
+        fprintf(stderr, "Usage : %s <fichier>\n", argv[0]);
         return 1;
     }
 
+    /* ===================== */
+    /* ANALYSE LEXICALE      */
+    /* ===================== */
     yyin = fopen(argv[1], "r");
     if (!yyin) {
         fprintf(stderr, "Erreur : impossible d'ouvrir %s\n", argv[1]);
         return 1;
     }
 
-    /* ===================== */
-    /* MODE LEXICAL          */
-    /* ===================== */
-    if (strcmp(argv[2], "lex") == 0) {
-        int tok;
+    printf("=== ANALYSE LEXICALE ===\n\n");
+    printf("%-6s %-6s %-22s %s\n",
+           "Ligne", "Col", "Token", "Valeur");
+    printf("------------------------------------------------------------\n");
 
-        printf("=== ANALYSE LEXICALE ===\n\n");
-        printf("%-6s %-6s %-22s %s\n",
-               "Ligne", "Col", "Token", "Valeur");
-        printf("------------------------------------------------------------\n");
+    while ((tok = yylex()) != 0) {
+        printf("%-6d %-6d %-22s ",
+               line_num, col_num, token_name(tok));
 
-        while ((tok = yylex()) != 0) {
-            printf("%-6d %-6d %-22s ",
-                   line_num, col_num, token_name(tok));
+        switch (tok) {
+            case TOK_ID:
+            case TOK_STRING:
+            case TOK_COMPLEX:
+                printf("%s", yylval.strval);
+                break;
 
-            switch (tok) {
-                case TOK_ID:
-                case TOK_STRING:
-                case TOK_COMPLEX:
-                    printf("%s", yylval.strval);
-                    break;
-                case TOK_INT:
-                    printf("%d", yylval.intval);
-                    break;
-                case TOK_FLOAT:
-                    printf("%f", yylval.floatval);
-                    break;
-                case TOK_CHAR:
-                    printf("'%c'", yylval.charval);
-                    break;
-                default:
-                    printf("-");
-            }
-            printf("\n");
+            case TOK_INT:
+                printf("%d", yylval.intval);
+                break;
+
+            case TOK_FLOAT:
+                printf("%f", yylval.floatval);
+                break;
+
+            case TOK_CHAR:
+                printf("'%c'", yylval.charval);
+                break;
+
+            default:
+                printf("-");
         }
+        printf("\n");
     }
+
+    fclose(yyin);
 
     /* ===================== */
-    /* MODE SYNTAXIQUE       */
+    /* ANALYSE SYNTAXIQUE    */
     /* ===================== */
-    else if (strcmp(argv[2], "parse") == 0) {
-        printf("=== ANALYSE SYNTAXIQUE ===\n\n");
-
-        if (yyparse() == 0)
-            printf("✅ Analyse syntaxique réussie\n");
-        else
-            printf("❌ Analyse syntaxique échouée\n");
+    yyin = fopen(argv[1], "r");
+    if (!yyin) {
+        fprintf(stderr, "Erreur : impossible de rouvrir %s\n", argv[1]);
+        return 1;
     }
 
-    else {
-        fprintf(stderr,
-            "Mode inconnu : %s (utiliser lex ou parse)\n", argv[2]);
-    }
+    printf("\n=== ANALYSE SYNTAXIQUE ===\n\n");
+
+    if (yyparse() == 0)
+        printf("Analyse syntaxique réussie\n");
+    else
+        printf("Analyse syntaxique échouée\n");
 
     fclose(yyin);
     return 0;
 }
+
