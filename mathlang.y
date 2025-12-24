@@ -210,68 +210,73 @@ const char* token_name(int tok) {
 
 int main(int argc, char **argv) {
     extern FILE *yyin;
-    int tok;
 
-    if (argc > 1) {
-        yyin = fopen(argv[1], "r");
-        if (!yyin) {
-            fprintf(stderr, "Erreur : impossible d'ouvrir %s\n", argv[1]);
-            return 1;
+    if (argc < 3) {
+        fprintf(stderr,
+            "Usage : %s <fichier> <lex|parse>\n", argv[0]);
+        return 1;
+    }
+
+    yyin = fopen(argv[1], "r");
+    if (!yyin) {
+        fprintf(stderr, "Erreur : impossible d'ouvrir %s\n", argv[1]);
+        return 1;
+    }
+
+    /* ===================== */
+    /* MODE LEXICAL          */
+    /* ===================== */
+    if (strcmp(argv[2], "lex") == 0) {
+        int tok;
+
+        printf("=== ANALYSE LEXICALE ===\n\n");
+        printf("%-6s %-6s %-22s %s\n",
+               "Ligne", "Col", "Token", "Valeur");
+        printf("------------------------------------------------------------\n");
+
+        while ((tok = yylex()) != 0) {
+            printf("%-6d %-6d %-22s ",
+                   line_num, col_num, token_name(tok));
+
+            switch (tok) {
+                case TOK_ID:
+                case TOK_STRING:
+                case TOK_COMPLEX:
+                    printf("%s", yylval.strval);
+                    break;
+                case TOK_INT:
+                    printf("%d", yylval.intval);
+                    break;
+                case TOK_FLOAT:
+                    printf("%f", yylval.floatval);
+                    break;
+                case TOK_CHAR:
+                    printf("'%c'", yylval.charval);
+                    break;
+                default:
+                    printf("-");
+            }
+            printf("\n");
         }
     }
 
-    printf("========================================\n");
-    printf("        ANALYSE SYNTAXIQUE (BISON)\n");
-    printf("========================================\n\n");
+    /* ===================== */
+    /* MODE SYNTAXIQUE       */
+    /* ===================== */
+    else if (strcmp(argv[2], "parse") == 0) {
+        printf("=== ANALYSE SYNTAXIQUE ===\n\n");
 
-    printf("%-6s %-6s %-22s %s\n",
-           "Ligne", "Col", "Token", "Valeur");
-    printf("------------------------------------------------------------\n");
-
-    while ((tok = yylex()) != 0) {
-        printf("%-6d %-6d %-22s ",
-               line_num,
-               col_num,
-               token_name(tok));
-
-        switch (tok) {
-            case TOK_ID:
-            case TOK_STRING:
-            case TOK_COMPLEX:
-                printf("%s", yylval.strval);
-                break;
-
-            case TOK_INT:
-                printf("%d", yylval.intval);
-                break;
-
-            case TOK_FLOAT:
-                printf("%f", yylval.floatval);
-                break;
-
-            case TOK_CHAR:
-                printf("'%c'", yylval.charval);
-                break;
-
-            case TOK_TRUE:
-                printf("true");
-                break;
-
-            case TOK_FALSE:
-                printf("false");
-                break;
-
-            default:
-                printf("-");
-        }
-
-        printf("\n");
+        if (yyparse() == 0)
+            printf("✅ Analyse syntaxique réussie\n");
+        else
+            printf("❌ Analyse syntaxique échouée\n");
     }
 
-    printf("\n========================================\n");
-    printf("        FIN DE L'ANALYSE SYNTAXIQUE\n");
-    printf("========================================\n");
+    else {
+        fprintf(stderr,
+            "Mode inconnu : %s (utiliser lex ou parse)\n", argv[2]);
+    }
 
-    if (argc > 1) fclose(yyin);
+    fclose(yyin);
     return 0;
 }
