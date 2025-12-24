@@ -77,10 +77,16 @@ void print_automaton(Automaton *aut, const char *name) {
     
     printf("Transitions:\n");
     for (int i = 0; i < aut->num_transitions; i++) {
-        printf("  q%d --%c--> q%d\n", 
-               aut->transitions[i].from_state,
-               aut->transitions[i].symbol == '\0' ? 'ε' : aut->transitions[i].symbol,
-               aut->transitions[i].to_state);
+        if (aut->transitions[i].symbol == '\0') {
+            printf("  q%d --ε--> q%d\n", 
+                   aut->transitions[i].from_state,
+                   aut->transitions[i].to_state);
+        } else {
+            printf("  q%d --%c--> q%d\n", 
+                   aut->transitions[i].from_state,
+                   aut->transitions[i].symbol,
+                   aut->transitions[i].to_state);
+        }
     }
 }
 
@@ -220,42 +226,54 @@ void nfa_to_dfa(Automaton *nfa, Automaton *dfa) {
 
 // ==================== Construction d'AFN pour différentes expressions ====================
 
-// AFN pour Identificateur: [a-z][a-z0-9_]*
+// AFN pour Identificateur: [a-zA-Z_][a-zA-Z0-9_]*
 void build_identifier_nfa(Automaton *aut) {
     init_automaton(aut);
-    aut->num_states = 5;
+    aut->num_states = 6;
     aut->initial_state = 0;
-    aut->accepting_states[4] = true;
+    aut->accepting_states[2] = true;
+    aut->accepting_states[5] = true;
     
-    // Ajouter les transitions
-    // q0 --[a-z]--> q1
+    // Construction selon Thompson
+    // q0 --[a-zA-Z_]--> q1
     for (char c = 'a'; c <= 'z'; c++) {
         add_transition(aut, 0, 1, c);
         add_to_alphabet(aut, c);
     }
-    
-    // q1 --epsilon--> q2
-    add_transition(aut, 1, 2, '\0');
-    
-    // q1 --epsilon--> q4
-    add_transition(aut, 1, 4, '\0');
-    
-    // q2 --[a-z0-9_]--> q3
-    for (char c = 'a'; c <= 'z'; c++) {
-        add_transition(aut, 2, 3, c);
-    }
-    for (char c = '0'; c <= '9'; c++) {
-        add_transition(aut, 2, 3, c);
+    for (char c = 'A'; c <= 'Z'; c++) {
+        add_transition(aut, 0, 1, c);
         add_to_alphabet(aut, c);
     }
-    add_transition(aut, 2, 3, '_');
+    add_transition(aut, 0, 1, '_');
     add_to_alphabet(aut, '_');
     
-    // q3 --epsilon--> q2 (boucle)
-    add_transition(aut, 3, 2, '\0');
+    // q1 --epsilon--> q2 (acceptant - identificateur d'un seul caractère valide)
+    add_transition(aut, 1, 2, '\0');
     
-    // q3 --epsilon--> q4
-    add_transition(aut, 3, 4, '\0');
+    // q2 --epsilon--> q5 (peut accepter directement)
+    add_transition(aut, 2, 5, '\0');
+    
+    // q2 --epsilon--> q3 (pour continuer la boucle de Kleene)
+    add_transition(aut, 2, 3, '\0');
+    
+    // q3 --[a-zA-Z0-9_]--> q4
+    for (char c = 'a'; c <= 'z'; c++) {
+        add_transition(aut, 3, 4, c);
+    }
+    for (char c = 'A'; c <= 'Z'; c++) {
+        add_transition(aut, 3, 4, c);
+    }
+    for (char c = '0'; c <= '9'; c++) {
+        add_transition(aut, 3, 4, c);
+        add_to_alphabet(aut, c);
+    }
+    add_transition(aut, 3, 4, '_');
+    
+    // q4 --epsilon--> q3 (boucle pour répéter)
+    add_transition(aut, 4, 3, '\0');
+    
+    // q4 --epsilon--> q5 (état final)
+    add_transition(aut, 4, 5, '\0');
 }
 
 // AFN pour Entier: [0-9]+
@@ -481,14 +499,13 @@ int main() {
     Automaton nfa, dfa;
     
     printf("╔════════════════════════════════════════════════════════════════╗\n");
-    printf("║   Construction AFN et AFD - Analyse Lexicale Manuelle         ║\n");
-    printf("║   Implémentation complète de tous les tokens                   ║\n");
+    printf("║   Construction AFN et AFD - Analyse Lexicale Manuelle          ║\n");
     printf("╚════════════════════════════════════════════════════════════════╝\n");
     
-    // Test 1: Identificateur
-    printf("\n\n┌─────────────────────────────────────────────────────────────┐\n");
-    printf("│ 1. IDENTIFICATEUR: [a-z][a-z0-9_]*                         │\n");
-    printf("└─────────────────────────────────────────────────────────────┘\n");
+    // Test 1: Identificateur (CORRIGÉ)
+    printf("\n\n┌─────────────────────────────────────────────────────────────────┐\n");
+    printf("│ 1. IDENTIFICATEUR: [a-zA-Z_][a-zA-Z0-9_]*                       │\n");
+    printf("└─────────────────────────────────────────────────────────────────┘\n");
     
     build_identifier_nfa(&nfa);
     print_automaton(&nfa, "AFN - Identificateur");
@@ -498,7 +515,7 @@ int main() {
     
     // Test 2: Mot-clé SOIT
     printf("\n\n┌─────────────────────────────────────────────────────────────┐\n");
-    printf("│ 2. MOT-CLÉ: SOIT                                           │\n");
+    printf("│ 2. MOT-CLÉ: SOIT                                            │\n");
     printf("└─────────────────────────────────────────────────────────────┘\n");
     
     build_soit_nfa(&nfa);
@@ -506,7 +523,7 @@ int main() {
     
     // Test 3: Mot-clé dans
     printf("\n\n┌─────────────────────────────────────────────────────────────┐\n");
-    printf("│ 3. MOT-CLÉ: dans                                           │\n");
+    printf("│ 3. MOT-CLÉ: dans                                            │\n");
     printf("└─────────────────────────────────────────────────────────────┘\n");
     
     build_dans_nfa(&nfa);
@@ -514,7 +531,7 @@ int main() {
     
     // Test 4: Entier
     printf("\n\n┌─────────────────────────────────────────────────────────────┐\n");
-    printf("│ 4. ENTIER: [0-9]+                                          │\n");
+    printf("│ 4. ENTIER: [0-9]+                                           │\n");
     printf("└─────────────────────────────────────────────────────────────┘\n");
     
     build_integer_nfa(&nfa);
@@ -525,7 +542,7 @@ int main() {
     
     // Test 5: Nombre réel
     printf("\n\n┌─────────────────────────────────────────────────────────────┐\n");
-    printf("│ 5. NOMBRE RÉEL: [0-9]+\\.[0-9]+                             │\n");
+    printf("│ 5. NOMBRE RÉEL: [0-9]+\\.[0-9]+                              │\n");
     printf("└─────────────────────────────────────────────────────────────┘\n");
     
     build_real_nfa(&nfa);
@@ -544,7 +561,7 @@ int main() {
     
     // Test 7: Affectation
     printf("\n\n┌─────────────────────────────────────────────────────────────┐\n");
-    printf("│ 7. AFFECTATION: <-                                         │\n");
+    printf("│ 7. AFFECTATION: <-                                          │\n");
     printf("└─────────────────────────────────────────────────────────────┘\n");
     
     build_affectation_nfa(&nfa);
@@ -554,9 +571,9 @@ int main() {
     printf("║   Résumé de l'analyse                                          ║\n");
     printf("╠════════════════════════════════════════════════════════════════╣\n");
     printf("║   Tokens implémentés: 7                                        ║\n");
-    printf("║   - 1 Identificateur                                           ║\n");
+    printf("║   - 1 Identificateur [a-zA-Z_][a-zA-Z0-9_]*                    ║\n");
     printf("║   - 2 Mots-clés (SOIT, dans)                                   ║\n");
-    printf("║   - 3 Types numériques (Entier, Réel, Complexe)               ║\n");
+    printf("║   - 3 Types numériques (Entier, Réel, Complexe)                ║\n");
     printf("║   - 1 Opérateur (Affectation)                                  ║\n");
     printf("╚════════════════════════════════════════════════════════════════╝\n\n");
     
