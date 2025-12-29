@@ -58,6 +58,14 @@ typedef enum {
     OP_AND, OP_OR, OP_XOR, OP_NOT
 } SemanticOperator;
 
+typedef enum {
+    FUNC_SIN, FUNC_COS, FUNC_EXP, FUNC_LOG,
+    FUNC_SQRT, FUNC_ABS, FUNC_FLOOR, FUNC_CEIL,
+    FUNC_ROUND, FUNC_RE, FUNC_IM, FUNC_ARG,
+    FUNC_MAJUSCULES, FUNC_MINUSCULES, FUNC_LENGTH,
+    FUNC_CONCAT
+} MathFunction;
+
 /* ========================================================= */
 /*                 DÉTAILS DE TYPES                           */
 /* ========================================================= */
@@ -113,8 +121,6 @@ typedef struct SymbolEntry {
     bool is_const;
     bool is_used;
 
-    int declaration_line;
-    int declaration_col;
     int scope_level;
 
     TypeDetails* details;
@@ -160,9 +166,7 @@ bool add_symbol(SymbolTable* table,
                 const char* name,
                 SymbolCategory category,
                 DataType type,
-                NumericSubType subtype,
-                int line,
-                int col);
+                NumericSubType subtype);
 
 SymbolEntry* find_symbol(SymbolTable* table, const char* name);
 SymbolEntry* find_symbol_in_current_scope(SymbolTable* table, const char* name);
@@ -192,6 +196,15 @@ DataType infer_unary_operation_type(DataType operand,
 
 bool is_numeric_type(DataType type);
 bool is_orderable_type(DataType type);
+
+/* Fonctions mathématiques et chaînes */
+DataType infer_math_function_type(MathFunction func, DataType arg_type);
+void check_math_function_constraints(MathFunction func, DataType arg_type,
+                                     int line, int col);
+DataType infer_string_operation_type(DataType left, DataType right,
+                                     SemanticOperator op);
+void check_division_by_zero(int is_literal_divisor, int divisor_value,
+                           int line, int col);
 
 /* ========================================================= */
 /*                 ERREURS / WARNINGS                         */

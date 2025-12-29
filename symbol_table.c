@@ -111,13 +111,11 @@ bool add_symbol(SymbolTable* table,
                 const char* name,
                 SymbolCategory category,
                 DataType type,
-                NumericSubType subtype,
-                int line,
-                int col) {
+                NumericSubType subtype) {
 
     SymbolEntry* old = find_symbol_in_current_scope(table, name);
     if (old) {
-        error_redeclared_symbol(name, line, col, old->declaration_line);
+        error_redeclared_symbol(name, 0, 0, 0);
         return false;
     }
 
@@ -127,8 +125,6 @@ bool add_symbol(SymbolTable* table,
     e->type = type;
     e->subtype = subtype;
     e->scope_level = table->current_scope;
-    e->declaration_line = line;
-    e->declaration_col = col;
     e->is_const = (category == SYMBOL_CONSTANT);
 
     unsigned idx = hash_function(name);
@@ -250,6 +246,121 @@ DataType infer_unary_operation_type(DataType t, SemanticOperator op) {
 }
 
 /* ========================================================= */
+/* FONCTIONS MATHÉMATIQUES                                   */
+/* ========================================================= */
+
+DataType infer_math_function_type(MathFunction func, DataType arg_type) {
+    switch (func) {
+        /* Fonctions trigonométriques: R → R */
+        case FUNC_SIN: case FUNC_COS: case FUNC_EXP:
+            return (is_numeric_type(arg_type)) ? TYPE_R : TYPE_ERROR;
+
+        /* Logarithme: R+ → R (ou C si arg négatif) */
+        case FUNC_LOG:
+            return (is_numeric_type(arg_type)) ? TYPE_R : TYPE_ERROR;
+
+        /* Racine carrée: 
+           - Si arg ≥ 0 (littéral) → R
+           - Si arg < 0 (littéral) → C
+           - Si arg variable → R (assume ≥ 0)
+        */
+        case FUNC_SQRT:
+            return (is_numeric_type(arg_type)) ? TYPE_R : TYPE_ERROR;
+
+        /* Valeur absolue: préserve le type */
+        case FUNC_ABS:
+            return (is_numeric_type(arg_type)) ? arg_type : TYPE_ERROR;
+
+        /* Floor, Ceil, Round: R → Z */
+        case FUNC_FLOOR: case FUNC_CEIL: case FUNC_ROUND:
+            return (is_numeric_type(arg_type)) ? TYPE_Z : TYPE_ERROR;
+
+        /* Partie réelle et imaginaire: C → R */
+        case FUNC_RE: case FUNC_IM:
+            return (arg_type == TYPE_C || arg_type == TYPE_R || arg_type == TYPE_Z) 
+                   ? TYPE_R : TYPE_ERROR;
+
+        /* Argument (phase): C → R */
+        case FUNC_ARG:
+            return (arg_type == TYPE_C) ? TYPE_R : TYPE_ERROR;
+
+        /* Opérations sur chaînes */
+        case FUNC_MAJUSCULES: case FUNC_MINUSCULES: case FUNC_LENGTH:
+            return (arg_type == TYPE_SIGMA) ? TYPE_SIGMA : TYPE_ERROR;
+
+        case FUNC_CONCAT:
+            return (arg_type == TYPE_SIGMA) ? TYPE_SIGMA : TYPE_ERROR;
+
+        default:
+            return TYPE_ERROR;
+    }
+}
+
+void check_math_function_constraints(MathFunction func, DataType arg_type,
+                                     int line, int col) {
+    char msg[256];
+
+    switch (func) {
+        case FUNC_LOG:
+            if (arg_type == TYPE_Z) {
+                snprintf(msg, sizeof(msg),
+                        "logarithme non défini pour Z (entiers) - attendu R");
+                semantic_warning(msg, line, col);
+            }
+            break;
+
+        case FUNC_SQRT:
+            if (arg_type == TYPE_C) {
+                snprintf(msg, sizeof(msg),
+                        "SQRT sur nombre complexe - résultat en C");
+            }
+            break;
+
+        case FUNC_ARG:
+            if (arg_type != TYPE_C) {
+                snprintf(msg, sizeof(msg),
+                        "ARG(argument/phase) requiert type C, pas %s",
+                        type_to_string(arg_type));
+                semantic_error(msg, line, col);
+            }
+            break;
+
+        default:
+            break;
+    }
+}
+
+/* ========================================================= */
+/* OPÉRATIONS SUR CHAÎNES                                     */
+/* ========================================================= */
+
+DataType infer_string_operation_type(DataType left, DataType right,
+                                     SemanticOperator op) {
+    /* Concaténation: SIGMA + SIGMA → SIGMA */
+    if (op == OP_ADD) {
+        if (left == TYPE_SIGMA && right == TYPE_SIGMA)
+            return TYPE_SIGMA;
+        /* Conversion possible: autre type → SIGMA (cast implicite) */
+        if (left == TYPE_SIGMA || right == TYPE_SIGMA)
+            return TYPE_SIGMA;
+        return TYPE_ERROR;
+    }
+    return TYPE_ERROR;
+}
+
+/* ========================================================= */
+/* DÉTECTION DIVISION PAR ZÉRO                               */
+/* ========================================================= */
+
+void check_division_by_zero(int is_literal_divisor, int divisor_value,
+                           int line, int col) {
+    if (is_literal_divisor && divisor_value == 0) {
+        semantic_error("Division par zéro - impossible à la compilation", 
+                      line, col);
+    }
+}
+
+/* ========================================================= */
 /* ERREURS                                                   */
 /* ========================================================= */
 
@@ -341,6 +452,16 @@ const char* category_to_string(SymbolCategory c) {
     }
 }
 
+
+
+static int cmp_entries(const void* a, const void* b) {
+    const SymbolEntry* ea = *(const SymbolEntry* const*)a;
+    const SymbolEntry* eb = *(const SymbolEntry* const*)b;
+    if (ea->scope_level != eb->scope_level)
+        return (ea->scope_level < eb->scope_level) ? -1 : 1;
+    return strcmp(ea->name, eb->name);
+}
+
 void print_symbol_table(const SymbolTable* table) {
     if (!table) {
         printf("Symbol table: (null)\n");
@@ -348,22 +469,34 @@ void print_symbol_table(const SymbolTable* table) {
     }
 
     printf("\n=== SYMBOL TABLE (%d symbols) ===\n", table->count);
-    printf("%-20s %-10s %-10s %-5s %-5s %-5s %-5s\n",
+    printf("%-20s %-10s %-10s %-5s %-6s %-6s %-6s\n",
            "Name", "Category", "Type", "Scope", "Const", "Init", "Used");
-    printf("---------------------------------------------------------------------\n");
+    printf("-----------------------------------------------------------------------\n");
 
+    SymbolEntry** list = NULL;
+    if (table->count > 0) {
+        list = (SymbolEntry**)malloc(sizeof(SymbolEntry*) * table->count);
+    }
+    int idx = 0;
     for (int i = 0; i < HASH_TABLE_SIZE; i++) {
         for (SymbolEntry* e = table->entries[i]; e; e = e->next) {
-            printf("%-20s %-10s %-10s %-5d %-5s %-5s %-5s\n",
-                   e->name,
-                   category_to_string(e->category),
-                   type_to_string(e->type),
-                   e->scope_level,
-                   e->is_const ? "yes" : "no",
-                   e->is_initialized ? "yes" : "no",
-                   e->is_used ? "yes" : "no");
+            if (list && idx < table->count) list[idx++] = e;
         }
     }
+    if (list && idx > 0) qsort(list, idx, sizeof(SymbolEntry*), cmp_entries);
 
-    printf("=====================================================================\n");
+    for (int i = 0; i < idx; i++) {
+        SymbolEntry* e = list[i];
+        printf("%-20s %-10s %-10s %-5d %-6s %-6s %-6s\n",
+               e->name,
+               category_to_string(e->category),
+               type_to_string(e->type),
+               e->scope_level,
+               e->is_const ? "yes" : "no",
+               e->is_initialized ? "yes" : "no",
+               e->is_used ? "yes" : "no");
+    }
+
+    free(list);
+    printf("=======================================================================\n");
 }
