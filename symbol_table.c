@@ -342,11 +342,28 @@ const char* category_to_string(SymbolCategory c) {
 }
 
 void print_symbol_table(const SymbolTable* table) {
-    printf("Symboles (%d):\n", table->count);
-    for (int i = 0; i < HASH_TABLE_SIZE; i++)
-        for (SymbolEntry* e = table->entries[i]; e; e = e->next)
-            printf("  %s (%s) scope=%d\n",
+    if (!table) {
+        printf("Symbol table: (null)\n");
+        return;
+    }
+
+    printf("\n=== SYMBOL TABLE (%d symbols) ===\n", table->count);
+    printf("%-20s %-10s %-10s %-5s %-5s %-5s %-5s\n",
+           "Name", "Category", "Type", "Scope", "Const", "Init", "Used");
+    printf("---------------------------------------------------------------------\n");
+
+    for (int i = 0; i < HASH_TABLE_SIZE; i++) {
+        for (SymbolEntry* e = table->entries[i]; e; e = e->next) {
+            printf("%-20s %-10s %-10s %-5d %-5s %-5s %-5s\n",
                    e->name,
                    category_to_string(e->category),
-                   e->scope_level);
+                   type_to_string(e->type),
+                   e->scope_level,
+                   e->is_const ? "yes" : "no",
+                   e->is_initialized ? "yes" : "no",
+                   e->is_used ? "yes" : "no");
+        }
+    }
+
+    printf("=====================================================================\n");
 }

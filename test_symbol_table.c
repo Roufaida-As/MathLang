@@ -21,9 +21,12 @@ static int tests_failed = 0;
 /* ========================================================= */
 
 void print_test_header(const char* test_name) {
-    printf("\n" COLOR_BLUE "═══════════════════════════════════════════════════════════\n");
-    printf("  TEST: %s\n", test_name);
-    printf("═══════════════════════════════════════════════════════════" COLOR_RESET "\n");
+    printf("\n" COLOR_BLUE
+           "═══════════════════════════════════════════════════════════\n"
+           "  TEST: %s\n"
+           "═══════════════════════════════════════════════════════════"
+           COLOR_RESET "\n",
+           test_name);
 }
 
 void assert_test(const char* description, bool condition) {
@@ -34,6 +37,15 @@ void assert_test(const char* description, bool condition) {
         printf(COLOR_RED "✗ FAIL" COLOR_RESET ": %s\n", description);
         tests_failed++;
     }
+}
+
+/* ========================================================= */
+/* AFFICHAGE TABLE                                           */
+/* ========================================================= */
+
+static void show_table(const char* title, SymbolTable* table) {
+    printf("\n" COLOR_YELLOW ">>> SYMBOL TABLE AFTER TEST: %s <<<\n" COLOR_RESET, title);
+    print_symbol_table(table);
 }
 
 /* ========================================================= */
@@ -49,6 +61,7 @@ void test_initialization(void) {
     assert_test("Table vide", table->count == 0);
     assert_test("Portée initiale = 0", table->current_scope == 0);
 
+    show_table("Initialisation", table);
     free_symbol_table(table);
 }
 
@@ -73,6 +86,7 @@ void test_add_symbols(void) {
     bool dup = add_symbol(table, "x", SYMBOL_VARIABLE, TYPE_Z, SUBTYPE_DEFAULT, 4, 1);
     assert_test("Redéclaration refusée", !dup);
 
+    show_table("Ajout de symboles", table);
     free_symbol_table(table);
 }
 
@@ -97,6 +111,7 @@ void test_find_symbols(void) {
     assert_test("'pi' constante", pi && pi->is_const);
     assert_test("'nope' absent", nope == NULL);
 
+    show_table("Recherche de symboles", table);
     free_symbol_table(table);
 }
 
@@ -110,14 +125,17 @@ void test_scopes(void) {
     SymbolTable* table = init_symbol_table();
 
     add_symbol(table, "x", SYMBOL_VARIABLE, TYPE_Z, SUBTYPE_DEFAULT, 1, 1);
+    show_table("Après déclaration globale", table);
 
     enter_scope(table);
     add_symbol(table, "x", SYMBOL_VARIABLE, TYPE_R, SUBTYPE_DEFAULT, 2, 1);
+    show_table("Après masquage (scope 1)", table);
 
     SymbolEntry* x = find_symbol(table, "x");
     assert_test("Masquage x -> R", x && x->type == TYPE_R);
 
     exit_scope(table);
+    show_table("Après sortie de portée", table);
 
     x = find_symbol(table, "x");
     assert_test("Retour x -> Z", x && x->type == TYPE_Z);
@@ -146,6 +164,7 @@ void test_symbol_state(void) {
     assert_test("Initialisée", v->is_initialized);
     assert_test("Utilisée", v->is_used);
 
+    show_table("État des symboles", table);
     free_symbol_table(table);
 }
 
@@ -159,7 +178,6 @@ void test_type_compatibility(void) {
     assert_test("Z -> Z", check_type_compatibility(TYPE_Z, TYPE_Z));
     assert_test("Z -> R", check_type_compatibility(TYPE_R, TYPE_Z));
     assert_test("R -> C", check_type_compatibility(TYPE_C, TYPE_R));
-
     assert_test("R -> Z refusé", !check_type_compatibility(TYPE_Z, TYPE_R));
     assert_test("B -> Z refusé", !check_type_compatibility(TYPE_Z, TYPE_B));
 }
@@ -235,11 +253,13 @@ void test_realistic_scenario(void) {
     assert_test("x accessible dans bloc", find_symbol(table, "x") != NULL);
     assert_test("temp accessible dans bloc", temp != NULL);
 
+    show_table("Dans le bloc", table);
+
     exit_scope(table);
 
     assert_test("temp supprimé", find_symbol(table, "temp") == NULL);
 
-    print_symbol_table(table);
+    show_table("Après sortie du bloc", table);
     free_symbol_table(table);
 }
 
