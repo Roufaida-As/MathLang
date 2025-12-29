@@ -7,11 +7,11 @@
 #include <stdbool.h>
 
 /* Couleurs pour l'affichage */
-#define COLOR_GREEN  "\033[0;32m"
-#define COLOR_RED    "\033[0;31m"
+#define COLOR_GREEN "\033[0;32m"
+#define COLOR_RED "\033[0;31m"
 #define COLOR_YELLOW "\033[0;33m"
-#define COLOR_BLUE   "\033[0;34m"
-#define COLOR_RESET  "\033[0m"
+#define COLOR_BLUE "\033[0;34m"
+#define COLOR_RESET "\033[0m"
 
 static int tests_passed = 0;
 static int tests_failed = 0;
@@ -20,20 +20,24 @@ static int tests_failed = 0;
 /* OUTILS DE TEST                                            */
 /* ========================================================= */
 
-void print_test_header(const char* test_name) {
+void print_test_header(const char *test_name)
+{
     printf("\n" COLOR_BLUE
            "═══════════════════════════════════════════════════════════\n"
            "  TEST: %s\n"
-           "═══════════════════════════════════════════════════════════"
-           COLOR_RESET "\n",
+           "═══════════════════════════════════════════════════════════" COLOR_RESET "\n",
            test_name);
 }
 
-void assert_test(const char* description, bool condition) {
-    if (condition) {
+void assert_test(const char *description, bool condition)
+{
+    if (condition)
+    {
         printf(COLOR_GREEN "✓ PASS" COLOR_RESET ": %s\n", description);
         tests_passed++;
-    } else {
+    }
+    else
+    {
         printf(COLOR_RED "✗ FAIL" COLOR_RESET ": %s\n", description);
         tests_failed++;
     }
@@ -43,7 +47,8 @@ void assert_test(const char* description, bool condition) {
 /* AFFICHAGE TABLE                                           */
 /* ========================================================= */
 
-static void show_table(const char* title, SymbolTable* table) {
+static void show_table(const char *title, SymbolTable *table)
+{
     printf("\n" COLOR_YELLOW ">>> SYMBOL TABLE AFTER TEST: %s <<<\n" COLOR_RESET, title);
     print_symbol_table(table);
 }
@@ -52,10 +57,11 @@ static void show_table(const char* title, SymbolTable* table) {
 /* TEST 1 : INITIALISATION                                   */
 /* ========================================================= */
 
-void test_initialization(void) {
+void test_initialization(void)
+{
     print_test_header("Initialisation");
 
-    SymbolTable* table = init_symbol_table();
+    SymbolTable *table = init_symbol_table();
 
     assert_test("Table non NULL", table != NULL);
     assert_test("Table vide", table->count == 0);
@@ -69,10 +75,11 @@ void test_initialization(void) {
 /* TEST 2 : AJOUT DE SYMBOLES                                 */
 /* ========================================================= */
 
-void test_add_symbols(void) {
+void test_add_symbols(void)
+{
     print_test_header("Ajout de symboles");
 
-    SymbolTable* table = init_symbol_table();
+    SymbolTable *table = init_symbol_table();
 
     bool a = add_symbol(table, "x", SYMBOL_VARIABLE, TYPE_Z, SUBTYPE_DEFAULT, 1, 1);
     bool b = add_symbol(table, "y", SYMBOL_VARIABLE, TYPE_R, SUBTYPE_DEFAULT, 2, 1);
@@ -94,17 +101,21 @@ void test_add_symbols(void) {
 /* TEST 3 : RECHERCHE                                        */
 /* ========================================================= */
 
-void test_find_symbols(void) {
+void test_find_symbols(void)
+{
     print_test_header("Recherche de symboles");
 
-    SymbolTable* table = init_symbol_table();
+    SymbolTable *table = init_symbol_table();
 
-    add_symbol(table, "a", SYMBOL_VARIABLE, TYPE_Z, SUBTYPE_DEFAULT, 1, 1);
-    add_symbol(table, "pi", SYMBOL_CONSTANT, TYPE_R, SUBTYPE_DEFAULT, 2, 1);
+    bool x = add_symbol(table, "a", SYMBOL_VARIABLE, TYPE_Z, SUBTYPE_DEFAULT, 1, 1);
+    bool y = add_symbol(table, "pi", SYMBOL_CONSTANT, TYPE_R, SUBTYPE_DEFAULT, 2, 1);
+    assert_test("Ajout a", x);
+    assert_test("Ajout pi", y);
 
-    SymbolEntry* a = find_symbol(table, "a");
-    SymbolEntry* pi = find_symbol(table, "pi");
-    SymbolEntry* nope = find_symbol(table, "nope");
+
+    SymbolEntry *a = find_symbol(table, "a");
+    SymbolEntry *pi = find_symbol(table, "pi");
+    SymbolEntry *nope = find_symbol(table, "nope");
 
     assert_test("'a' trouvé", a != NULL);
     assert_test("'a' type Z", a && a->type == TYPE_Z);
@@ -119,10 +130,11 @@ void test_find_symbols(void) {
 /* TEST 4 : PORTÉES                                          */
 /* ========================================================= */
 
-void test_scopes(void) {
+void test_scopes(void)
+{
     print_test_header("Gestion des portées");
 
-    SymbolTable* table = init_symbol_table();
+    SymbolTable *table = init_symbol_table();
 
     add_symbol(table, "x", SYMBOL_VARIABLE, TYPE_Z, SUBTYPE_DEFAULT, 1, 1);
     show_table("Après déclaration globale", table);
@@ -131,7 +143,7 @@ void test_scopes(void) {
     add_symbol(table, "x", SYMBOL_VARIABLE, TYPE_R, SUBTYPE_DEFAULT, 2, 1);
     show_table("Après masquage (scope 1)", table);
 
-    SymbolEntry* x = find_symbol(table, "x");
+    SymbolEntry *x = find_symbol(table, "x");
     assert_test("Masquage x -> R", x && x->type == TYPE_R);
 
     exit_scope(table);
@@ -147,13 +159,14 @@ void test_scopes(void) {
 /* TEST 5 : ÉTAT DES SYMBOLES                                 */
 /* ========================================================= */
 
-void test_symbol_state(void) {
+void test_symbol_state(void)
+{
     print_test_header("État des symboles");
 
-    SymbolTable* table = init_symbol_table();
+    SymbolTable *table = init_symbol_table();
     add_symbol(table, "v", SYMBOL_VARIABLE, TYPE_Z, SUBTYPE_DEFAULT, 1, 1);
 
-    SymbolEntry* v = find_symbol(table, "v");
+    SymbolEntry *v = find_symbol(table, "v");
 
     assert_test("Non initialisée", !v->is_initialized);
     assert_test("Non utilisée", !v->is_used);
@@ -172,7 +185,8 @@ void test_symbol_state(void) {
 /* TEST 6 : COMPATIBILITÉ DE TYPES                            */
 /* ========================================================= */
 
-void test_type_compatibility(void) {
+void test_type_compatibility(void)
+{
     print_test_header("Compatibilité de types");
 
     assert_test("Z -> Z", check_type_compatibility(TYPE_Z, TYPE_Z));
@@ -186,33 +200,35 @@ void test_type_compatibility(void) {
 /* TEST 7 : INFÉRENCE DE TYPES                                */
 /* ========================================================= */
 
-void test_type_inference(void) {
+void test_type_inference(void)
+{
     print_test_header("Inférence de types");
 
     assert_test("Z + Z = Z",
-        infer_binary_operation_type(TYPE_Z, TYPE_Z, OP_ADD) == TYPE_Z);
+                infer_binary_operation_type(TYPE_Z, TYPE_Z, OP_ADD) == TYPE_Z);
 
     assert_test("Z + R = R",
-        infer_binary_operation_type(TYPE_Z, TYPE_R, OP_ADD) == TYPE_R);
+                infer_binary_operation_type(TYPE_Z, TYPE_R, OP_ADD) == TYPE_R);
 
     assert_test("R * C = C",
-        infer_binary_operation_type(TYPE_R, TYPE_C, OP_MUL) == TYPE_C);
+                infer_binary_operation_type(TYPE_R, TYPE_C, OP_MUL) == TYPE_C);
 
     assert_test("Z < Z = B",
-        infer_binary_operation_type(TYPE_Z, TYPE_Z, OP_LT) == TYPE_B);
+                infer_binary_operation_type(TYPE_Z, TYPE_Z, OP_LT) == TYPE_B);
 
     assert_test("B AND B = B",
-        infer_binary_operation_type(TYPE_B, TYPE_B, OP_AND) == TYPE_B);
+                infer_binary_operation_type(TYPE_B, TYPE_B, OP_AND) == TYPE_B);
 
     assert_test("B + Z = ERROR",
-        infer_binary_operation_type(TYPE_B, TYPE_Z, OP_ADD) == TYPE_ERROR);
+                infer_binary_operation_type(TYPE_B, TYPE_Z, OP_ADD) == TYPE_ERROR);
 }
 
 /* ========================================================= */
 /* TEST 8 : PRÉDICATS DE TYPES                                */
 /* ========================================================= */
 
-void test_type_predicates(void) {
+void test_type_predicates(void)
+{
     print_test_header("Prédicats de types");
 
     assert_test("Z numérique", is_numeric_type(TYPE_Z));
@@ -228,16 +244,17 @@ void test_type_predicates(void) {
 /* TEST 9 : SCÉNARIO RÉALISTE                                 */
 /* ========================================================= */
 
-void test_realistic_scenario(void) {
+void test_realistic_scenario(void)
+{
     print_test_header("Scénario réaliste");
 
-    SymbolTable* table = init_symbol_table();
+    SymbolTable *table = init_symbol_table();
 
     add_symbol(table, "x", SYMBOL_VARIABLE, TYPE_Z, SUBTYPE_DEFAULT, 1, 1);
     add_symbol(table, "pi", SYMBOL_CONSTANT, TYPE_R, SUBTYPE_DEFAULT, 2, 1);
 
-    SymbolEntry* x = find_symbol(table, "x");
-    SymbolEntry* pi = find_symbol(table, "pi");
+    SymbolEntry *x = find_symbol(table, "x");
+    SymbolEntry *pi = find_symbol(table, "pi");
 
     mark_symbol_initialized(x);
     mark_symbol_used(x);
@@ -246,7 +263,7 @@ void test_realistic_scenario(void) {
     enter_scope(table);
     add_symbol(table, "temp", SYMBOL_VARIABLE, TYPE_R, SUBTYPE_DEFAULT, 3, 5);
 
-    SymbolEntry* temp = find_symbol(table, "temp");
+    SymbolEntry *temp = find_symbol(table, "temp");
     mark_symbol_initialized(temp);
     mark_symbol_used(temp);
 
@@ -267,11 +284,12 @@ void test_realistic_scenario(void) {
 /* MAIN                                                      */
 /* ========================================================= */
 
-int main(void) {
+int main(void)
+{
     set_semantic_error_mode(SEMANTIC_NON_FATAL);
 
     printf("\n╔═══════════════════════════════════════════════════════════╗\n");
-    printf("║  SUITE DE TESTS - TABLE DES SYMBOLES MATHLANG              ║\n");
+    printf("║  SUITE DE TESTS - TABLE DES SYMBOLES MATHLANG             ║\n");
     printf("╚═══════════════════════════════════════════════════════════╝\n");
 
     test_initialization();
@@ -287,8 +305,8 @@ int main(void) {
     printf("\n╔═══════════════════════════════════════════════════════════╗\n");
     printf("║ RÉSULTATS FINAUX                                          ║\n");
     printf("╠═══════════════════════════════════════════════════════════╣\n");
-    printf("║ ✓ Tests réussis : %-3d                                   ║\n", tests_passed);
-    printf("║ ✗ Tests échoués : %-3d                                   ║\n", tests_failed);
+    printf("║ ✓ Tests réussis : %-3d                                     ║\n", tests_passed);
+    printf("║ ✗ Tests échoués : %-3d                                     ║\n", tests_failed);
     printf("╚═══════════════════════════════════════════════════════════╝\n");
 
     return tests_failed == 0 ? 0 : 1;
