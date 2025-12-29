@@ -113,8 +113,6 @@ typedef struct SymbolEntry {
     bool is_const;
     bool is_used;
 
-    int declaration_line;
-    int declaration_col;
     int scope_level;
 
     TypeDetails* details;
@@ -160,9 +158,7 @@ bool add_symbol(SymbolTable* table,
                 const char* name,
                 SymbolCategory category,
                 DataType type,
-                NumericSubType subtype,
-                int line,
-                int col);
+                NumericSubType subtype);
 
 SymbolEntry* find_symbol(SymbolTable* table, const char* name);
 SymbolEntry* find_symbol_in_current_scope(SymbolTable* table, const char* name);

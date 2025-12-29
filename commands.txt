@@ -43,3 +43,20 @@ gcc -Wall -g mathlang.tab.c lex.yy.c -o parser -lfl
 ./parser tests/test3.ml
 ./parser tests/test4.ml
 ./parser tests/test_parser.ml
+
+
+voici les commandes pour tester que les fichiers symbol_table.c et symbole_table.h
+
+gcc -Wall -Wextra test_symbol_table.c symbol_table.c -o test_symbol_table
+./test_symbol_table
+
+
+
+voici les commandes pour tester la partie syntaxico-sémantique:
+
+bison -d -v mathlang.y
+flex mathlang.l
+gcc -Wall -g mathlang.tab.c lex.yy.c symbol_table.c -o parser -lfl
+
+./parser tests/test_semantic_errors.ml
+./parser tests/test_parser.ml

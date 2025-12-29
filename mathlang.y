@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "symbol_table.h"
 
 extern int yylex();
 extern int line_num;
@@ -10,6 +11,9 @@ extern FILE *yyin;
 
 void yyerror(const char *s);
 const char* token_name(int tok);
+
+/* Table des symboles globale */
+SymbolTable* global_symbol_table = NULL;
 %}
 
 /* ===================== */
@@ -20,6 +24,11 @@ const char* token_name(int tok);
     double floatval;
     char charval;
     char* strval;
+    DataType datatype;
+    struct {
+        DataType type;
+        SymbolEntry* symbol;
+    } expr_info;
 }
 
 /* ===================== */
@@ -56,6 +65,10 @@ const char* token_name(int tok);
 %token TOK_INT8 TOK_INT16 TOK_INT32 TOK_INT64
 %token TOK_FLOAT_TYPE TOK_DOUBLE_TYPE
 %token TOK_INT_FUNC TOK_REEL TOK_BOOLEEN TOK_CHAINE
+
+/* Types non-terminaux */
+%type <datatype> type type_base type_arrow
+%type <expr_info> expression expr_or expr_xor expr_and expr_cmp expr_add expr_mul expr_unary primaire
 
 /* ===================== */
 /* MATHS                 */
@@ -132,12 +145,54 @@ declaration
 /* DÉCLARATIONS          */
 /* ===================== */
 declaration_variable
-    : TOK_SOIT TOK_ID TOK_IN type
-    | TOK_SOIT TOK_ID TOK_IN type TOK_TEL_QUE TOK_ID TOK_ASSIGN expression
+    : TOK_SOIT TOK_ID TOK_IN type {
+        if (global_symbol_table) {
+            add_symbol(global_symbol_table, $2, SYMBOL_VARIABLE, $4, 
+                      SUBTYPE_DEFAULT);
+        }
+        free($2);
+    }
+    | TOK_SOIT TOK_ID TOK_IN type TOK_TEL_QUE TOK_ID TOK_ASSIGN expression {
+        if (global_symbol_table) {
+            if (strcmp($2, $6) == 0) {
+                if (!check_type_compatibility($4, $8.type)) {
+                    error_type_mismatch($4, $8.type, line_num, col_num);
+                }
+                add_symbol(global_symbol_table, $2, SYMBOL_VARIABLE, $4, 
+                          SUBTYPE_DEFAULT);
+                SymbolEntry* entry = find_symbol(global_symbol_table, $2);
+                if (entry) {
+                    mark_symbol_initialized(entry);
+                }
+            } else {
+                semantic_error("Le nom de variable ne correspond pas", line_num, col_num);
+            }
+        }
+        free($2);
+        free($6);
+    }
     ;
 
 declaration_constante
-    : TOK_SOIT_CONST TOK_ID TOK_IN type TOK_TEL_QUE TOK_ID TOK_ASSIGN expression
+    : TOK_SOIT_CONST TOK_ID TOK_IN type TOK_TEL_QUE TOK_ID TOK_ASSIGN expression {
+        if (global_symbol_table) {
+            if (strcmp($2, $6) == 0) {
+                if (!check_type_compatibility($4, $8.type)) {
+                    error_type_mismatch($4, $8.type, line_num, col_num);
+                }
+                add_symbol(global_symbol_table, $2, SYMBOL_CONSTANT, $4, 
+                          SUBTYPE_DEFAULT);
+                SymbolEntry* entry = find_symbol(global_symbol_table, $2);
+                if (entry) {
+                    mark_symbol_initialized(entry);
+                }
+            } else {
+                semantic_error("Le nom de constante ne correspond pas", line_num, col_num);
+            }
+        }
+        free($2);
+        free($6);
+    }
     ;
 
 declaration_type
@@ -158,21 +213,29 @@ champ
 /* TYPES                 */
 /* ===================== */
 type
-    : type_arrow
+    : type_arrow { $$ = $1; }
     ;
 
 type_arrow
-    : type_base
-    | type_base TOK_ARROW type_arrow
+    : type_base { $$ = $1; }
+    | type_base TOK_ARROW type_arrow { $$ = TYPE_FUNCTION; /* Fonction */ }
     ;
 
 type_base
-    : TOK_TYPE_Z | TOK_TYPE_R | TOK_TYPE_B | TOK_TYPE_C
-    | TOK_TYPE_SIGMA | TOK_TYPE_CHAR
-    | TOK_INT8 | TOK_INT16 | TOK_INT32 | TOK_INT64
-    | TOK_FLOAT_TYPE | TOK_DOUBLE_TYPE
-    | TOK_ID
-    | TOK_LPAREN type TOK_RPAREN
+    : TOK_TYPE_Z { $$ = TYPE_Z; }
+    | TOK_TYPE_R { $$ = TYPE_R; }
+    | TOK_TYPE_B { $$ = TYPE_B; }
+    | TOK_TYPE_C { $$ = TYPE_C; }
+    | TOK_TYPE_SIGMA { $$ = TYPE_SIGMA; }
+    | TOK_TYPE_CHAR { $$ = TYPE_CHAR; }
+    | TOK_INT8 { $$ = TYPE_Z; }
+    | TOK_INT16 { $$ = TYPE_Z; }
+    | TOK_INT32 { $$ = TYPE_Z; }
+    | TOK_INT64 { $$ = TYPE_Z; }
+    | TOK_FLOAT_TYPE { $$ = TYPE_R; }
+    | TOK_DOUBLE_TYPE { $$ = TYPE_R; }
+    | TOK_ID { $$ = TYPE_UNKNOWN; /* Type personnalisé */ }
+    | TOK_LPAREN type TOK_RPAREN { $$ = $2; }
     ;
 
 /* ===================== */
@@ -226,25 +289,87 @@ instruction
 /* AFFECTATION           */
 /* ===================== */
 affectation
-    : TOK_ID TOK_ASSIGN expression
+    : TOK_ID TOK_ASSIGN expression {
+        if (global_symbol_table) {
+            SymbolEntry* entry = find_symbol(global_symbol_table, $1);
+            if (!entry) {
+                error_undeclared_symbol($1, line_num, col_num);
+            } else {
+                if (entry->is_const) {
+                    error_const_assignment($1, line_num, col_num);
+                }
+                if (!check_type_compatibility(entry->type, $3.type)) {
+                    error_type_mismatch(entry->type, $3.type, line_num, col_num);
+                }
+                mark_symbol_initialized(entry);
+                mark_symbol_used(entry);
+            }
+        }
+        free($1);
+    }
     ;
 
 /* ===================== */
 /* STRUCTURES            */
 /* ===================== */
 instruction_si
-    : TOK_SI expression TOK_ALORS bloc TOK_FIN
-    | TOK_SI expression TOK_ALORS bloc TOK_SINON bloc TOK_FIN
+    : TOK_SI expression TOK_ALORS bloc TOK_FIN {
+        if ($2.type != TYPE_B) {
+            semantic_error("La condition doit être de type B (booléen)", line_num, col_num);
+        }
+    }
+    | TOK_SI expression TOK_ALORS bloc TOK_SINON bloc TOK_FIN {
+        if ($2.type != TYPE_B) {
+            semantic_error("La condition doit être de type B (booléen)", line_num, col_num);
+        }
+    }
     ;
 
 instruction_tant_que
-    : TOK_TANT TOK_QUE expression TOK_FAIRE bloc TOK_FIN
+    : TOK_TANT TOK_QUE expression TOK_FAIRE bloc TOK_FIN {
+        if ($3.type != TYPE_B) {
+            semantic_error("La condition doit être de type B (booléen)", line_num, col_num);
+        }
+    }
     ;
 
 instruction_pour
-    : TOK_POUR TOK_ID TOK_DE expression TOK_A expression TOK_FAIRE bloc TOK_FIN
-    | TOK_POUR TOK_ID TOK_DE expression TOK_A expression TOK_PAR expression TOK_FAIRE bloc TOK_FIN
-    | TOK_POUR TOK_ID TOK_IN expression TOK_FAIRE bloc TOK_FIN
+    : TOK_POUR TOK_ID TOK_DE expression TOK_A expression TOK_FAIRE {
+        if (global_symbol_table) {
+            enter_scope(global_symbol_table);
+            add_symbol(global_symbol_table, $2, SYMBOL_VARIABLE, TYPE_Z,
+                       SUBTYPE_DEFAULT);
+            SymbolEntry* it = find_symbol(global_symbol_table, $2);
+            if (it) mark_symbol_initialized(it);
+        }
+    } bloc {
+        if (global_symbol_table) exit_scope(global_symbol_table);
+        free($2);
+    } TOK_FIN
+    | TOK_POUR TOK_ID TOK_DE expression TOK_A expression TOK_PAR expression TOK_FAIRE {
+        if (global_symbol_table) {
+            enter_scope(global_symbol_table);
+            add_symbol(global_symbol_table, $2, SYMBOL_VARIABLE, TYPE_Z,
+                       SUBTYPE_DEFAULT);
+            SymbolEntry* it = find_symbol(global_symbol_table, $2);
+            if (it) mark_symbol_initialized(it);
+        }
+    } bloc {
+        if (global_symbol_table) exit_scope(global_symbol_table);
+        free($2);
+    } TOK_FIN
+    | TOK_POUR TOK_ID TOK_IN expression TOK_FAIRE {
+        if (global_symbol_table) {
+            enter_scope(global_symbol_table);
+            add_symbol(global_symbol_table, $2, SYMBOL_VARIABLE, TYPE_UNKNOWN,
+                       SUBTYPE_DEFAULT);
+            SymbolEntry* it = find_symbol(global_symbol_table, $2);
+            if (it) mark_symbol_initialized(it);
+        }
+    } bloc {
+        if (global_symbol_table) exit_scope(global_symbol_table);
+        free($2);
+    } TOK_FIN
     ;
 
 instruction_repeter
@@ -257,7 +382,18 @@ instruction_repeter
 instruction_io
     : TOK_AFFICHER TOK_LPAREN liste_expressions TOK_RPAREN
     | TOK_AFFICHER_LIGNE TOK_LPAREN liste_expressions TOK_RPAREN
-    | TOK_LIRE TOK_LPAREN TOK_ID TOK_RPAREN
+    | TOK_LIRE TOK_LPAREN TOK_ID TOK_RPAREN {
+        if (global_symbol_table) {
+            SymbolEntry* e = find_symbol(global_symbol_table, $3);
+            if (!e) {
+                error_undeclared_symbol($3, line_num, col_num);
+            } else {
+                mark_symbol_initialized(e);
+                mark_symbol_used(e);
+            }
+        }
+        free($3);
+    }
     ;
 
 liste_expressions
@@ -270,59 +406,138 @@ liste_expressions
 /* ===================== */
 
 expression
-    : expr_or
+    : expr_or { $$ = $1; }
     ;
 
 expr_or
-    : expr_or TOK_OR expr_xor
-    | expr_xor
+    : expr_or TOK_OR expr_xor {
+        $$.type = infer_binary_operation_type($1.type, $3.type, OP_OR);
+        $$.symbol = NULL;
+    }
+    | expr_xor { $$ = $1; }
     ;
 
 expr_xor
-    : expr_xor TOK_XOR expr_and
-    | expr_and
+    : expr_xor TOK_XOR expr_and {
+        $$.type = infer_binary_operation_type($1.type, $3.type, OP_XOR);
+        $$.symbol = NULL;
+    }
+    | expr_and { $$ = $1; }
     ;
 
 expr_and
-    : expr_and TOK_AND expr_cmp
-    | expr_cmp
+    : expr_and TOK_AND expr_cmp {
+        $$.type = infer_binary_operation_type($1.type, $3.type, OP_AND);
+        $$.symbol = NULL;
+    }
+    | expr_cmp { $$ = $1; }
     ;
 
 expr_cmp
-    : expr_cmp TOK_EQ expr_add
-    | expr_cmp TOK_LT expr_add
-    | expr_cmp TOK_GT expr_add
-    | expr_add
+    : expr_cmp TOK_EQ expr_add {
+        $$.type = infer_binary_operation_type($1.type, $3.type, OP_EQ);
+        $$.symbol = NULL;
+    }
+    | expr_cmp TOK_LT expr_add {
+        $$.type = infer_binary_operation_type($1.type, $3.type, OP_LT);
+        $$.symbol = NULL;
+    }
+    | expr_cmp TOK_GT expr_add {
+        $$.type = infer_binary_operation_type($1.type, $3.type, OP_GT);
+        $$.symbol = NULL;
+    }
+    | expr_add { $$ = $1; }
     ;
 
 expr_add
-    : expr_add TOK_PLUS expr_mul
-    | expr_add TOK_MINUS expr_mul
-    | expr_mul
+    : expr_add TOK_PLUS expr_mul {
+        $$.type = infer_binary_operation_type($1.type, $3.type, OP_ADD);
+        $$.symbol = NULL;
+    }
+    | expr_add TOK_MINUS expr_mul {
+        $$.type = infer_binary_operation_type($1.type, $3.type, OP_SUB);
+        $$.symbol = NULL;
+    }
+    | expr_mul { $$ = $1; }
     ;
 
 expr_mul
-    : expr_mul TOK_MULT expr_unary
-    | expr_mul TOK_DIV_REAL expr_unary
-    | expr_unary
+    : expr_mul TOK_MULT expr_unary {
+        $$.type = infer_binary_operation_type($1.type, $3.type, OP_MUL);
+        $$.symbol = NULL;
+    }
+    | expr_mul TOK_DIV_REAL expr_unary {
+        $$.type = infer_binary_operation_type($1.type, $3.type, OP_DIV);
+        $$.symbol = NULL;
+    }
+    | expr_unary { $$ = $1; }
     ;
 
 expr_unary
-    : TOK_MINUS expr_unary %prec UMINUS
-    | TOK_NOT expr_unary
-    | primaire
+    : TOK_MINUS expr_unary %prec UMINUS {
+        $$.type = infer_unary_operation_type($2.type, OP_SUB);
+        $$.symbol = NULL;
+    }
+    | TOK_NOT expr_unary {
+        $$.type = infer_unary_operation_type($2.type, OP_NOT);
+        $$.symbol = NULL;
+    }
+    | primaire { $$ = $1; }
     ;
 
 primaire
-    : TOK_INT
-    | TOK_FLOAT
-    | TOK_STRING
-    | TOK_CHAR
-    | TOK_COMPLEX
-    | TOK_TRUE
-    | TOK_FALSE
-    | TOK_ID
-    | TOK_LPAREN expression TOK_RPAREN
+    : TOK_INT {
+        $$.type = TYPE_Z;
+        $$.symbol = NULL;
+    }
+    | TOK_FLOAT {
+        $$.type = TYPE_R;
+        $$.symbol = NULL;
+    }
+    | TOK_STRING {
+        $$.type = TYPE_SIGMA;
+        $$.symbol = NULL;
+    }
+    | TOK_CHAR {
+        $$.type = TYPE_CHAR;
+        $$.symbol = NULL;
+    }
+    | TOK_COMPLEX {
+        $$.type = TYPE_C;
+        $$.symbol = NULL;
+    }
+    | TOK_TRUE {
+        $$.type = TYPE_B;
+        $$.symbol = NULL;
+    }
+    | TOK_FALSE {
+        $$.type = TYPE_B;
+        $$.symbol = NULL;
+    }
+    | TOK_ID {
+        if (global_symbol_table) {
+            SymbolEntry* entry = find_symbol(global_symbol_table, $1);
+            if (!entry) {
+                error_undeclared_symbol($1, line_num, col_num);
+                $$.type = TYPE_ERROR;
+                $$.symbol = NULL;
+            } else {
+                if (!entry->is_initialized && entry->category == SYMBOL_VARIABLE) {
+                    error_uninitialized_variable($1, line_num, col_num);
+                }
+                mark_symbol_used(entry);
+                $$.type = entry->type;
+                $$.symbol = entry;
+            }
+        } else {
+            $$.type = TYPE_UNKNOWN;
+            $$.symbol = NULL;
+        }
+        free($1);
+    }
+    | TOK_LPAREN expression TOK_RPAREN {
+        $$ = $2;
+    }
     ;
 
 
@@ -428,8 +643,13 @@ int main(int argc, char **argv) {
     extern FILE *yyin;
     int tok;
 
+    /* Initialiser la table des symboles */
+    global_symbol_table = init_symbol_table();
+    set_semantic_error_mode(SEMANTIC_NON_FATAL);
+
     if (argc < 2) {
         fprintf(stderr, "Usage : %s <fichier>\n", argv[0]);
+        free_symbol_table(global_symbol_table);
         return 1;
     }
 
@@ -439,6 +659,7 @@ int main(int argc, char **argv) {
     yyin = fopen(argv[1], "r");
     if (!yyin) {
         fprintf(stderr, "Erreur : impossible d'ouvrir %s\n", argv[1]);
+        free_symbol_table(global_symbol_table);
         return 1;
     }
 
@@ -488,6 +709,7 @@ int main(int argc, char **argv) {
     yyin = fopen(argv[1], "r");
     if (!yyin) {
         fprintf(stderr, "Erreur : impossible de rouvrir %s\n", argv[1]);
+        free_symbol_table(global_symbol_table);
         return 1;
     }
 
@@ -503,6 +725,12 @@ int main(int argc, char **argv) {
         printf("Analyse syntaxique échouée\n");
 
     fclose(yyin);
+
+    /* Afficher la table des symboles finale */
+    print_symbol_table(global_symbol_table);
+
+    /* Libérer la mémoire */
+    free_symbol_table(global_symbol_table);
     return 0;
 }
 

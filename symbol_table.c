@@ -111,13 +111,11 @@ bool add_symbol(SymbolTable* table,
                 const char* name,
                 SymbolCategory category,
                 DataType type,
-                NumericSubType subtype,
-                int line,
-                int col) {
+                NumericSubType subtype) {
 
     SymbolEntry* old = find_symbol_in_current_scope(table, name);
     if (old) {
-        error_redeclared_symbol(name, line, col, old->declaration_line);
+        error_redeclared_symbol(name, 0, 0, 0);
         return false;
     }
 
@@ -127,8 +125,6 @@ bool add_symbol(SymbolTable* table,
     e->type = type;
     e->subtype = subtype;
     e->scope_level = table->current_scope;
-    e->declaration_line = line;
-    e->declaration_col = col;
     e->is_const = (category == SYMBOL_CONSTANT);
 
     unsigned idx = hash_function(name);
@@ -341,6 +337,16 @@ const char* category_to_string(SymbolCategory c) {
     }
 }
 
+
+
+static int cmp_entries(const void* a, const void* b) {
+    const SymbolEntry* ea = *(const SymbolEntry* const*)a;
+    const SymbolEntry* eb = *(const SymbolEntry* const*)b;
+    if (ea->scope_level != eb->scope_level)
+        return (ea->scope_level < eb->scope_level) ? -1 : 1;
+    return strcmp(ea->name, eb->name);
+}
+
 void print_symbol_table(const SymbolTable* table) {
     if (!table) {
         printf("Symbol table: (null)\n");
@@ -348,22 +354,34 @@ void print_symbol_table(const SymbolTable* table) {
     }
 
     printf("\n=== SYMBOL TABLE (%d symbols) ===\n", table->count);
-    printf("%-20s %-10s %-10s %-5s %-5s %-5s %-5s\n",
+    printf("%-20s %-10s %-10s %-5s %-6s %-6s %-6s\n",
            "Name", "Category", "Type", "Scope", "Const", "Init", "Used");
-    printf("---------------------------------------------------------------------\n");
+    printf("-----------------------------------------------------------------------\n");
 
+    SymbolEntry** list = NULL;
+    if (table->count > 0) {
+        list = (SymbolEntry**)malloc(sizeof(SymbolEntry*) * table->count);
+    }
+    int idx = 0;
     for (int i = 0; i < HASH_TABLE_SIZE; i++) {
         for (SymbolEntry* e = table->entries[i]; e; e = e->next) {
-            printf("%-20s %-10s %-10s %-5d %-5s %-5s %-5s\n",
-                   e->name,
-                   category_to_string(e->category),
-                   type_to_string(e->type),
-                   e->scope_level,
-                   e->is_const ? "yes" : "no",
-                   e->is_initialized ? "yes" : "no",
-                   e->is_used ? "yes" : "no");
+            if (list && idx < table->count) list[idx++] = e;
         }
     }
+    if (list && idx > 0) qsort(list, idx, sizeof(SymbolEntry*), cmp_entries);
 
-    printf("=====================================================================\n");
+    for (int i = 0; i < idx; i++) {
+        SymbolEntry* e = list[i];
+        printf("%-20s %-10s %-10s %-5d %-6s %-6s %-6s\n",
+               e->name,
+               category_to_string(e->category),
+               type_to_string(e->type),
+               e->scope_level,
+               e->is_const ? "yes" : "no",
+               e->is_initialized ? "yes" : "no",
+               e->is_used ? "yes" : "no");
+    }
+
+    free(list);
+    printf("=======================================================================\n");
 }
