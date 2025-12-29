@@ -111,11 +111,13 @@ bool add_symbol(SymbolTable* table,
                 const char* name,
                 SymbolCategory category,
                 DataType type,
-                NumericSubType subtype) {
+                NumericSubType subtype,
+                int line,
+                int col) {
 
     SymbolEntry* old = find_symbol_in_current_scope(table, name);
     if (old) {
-        error_redeclared_symbol(name, 0, 0, 0);
+        error_redeclared_symbol(name, line, col, 0);
         return false;
     }
 
@@ -381,11 +383,17 @@ void error_undeclared_symbol(const char* name, int line, int col) {
 }
 
 void error_redeclared_symbol(const char* name, int line, int col, int prev_line) {
-    fprintf(stderr,
-            "ERREUR [%d:%d] symbole '%s' déjà déclaré (ligne %d)\n",
-            line, col, name, prev_line);
+    if (prev_line > 0) {
+        fprintf(stderr,
+                "ERREUR [%d:%d] symbole '%s' déjà déclaré (ligne %d)\n",
+                line, col, name, prev_line);
+    } else {
+        fprintf(stderr,
+                "ERREUR [%d:%d] symbole '%s' déjà déclaré\n",
+                line, col, name);
+    }
     if (error_mode == SEMANTIC_FATAL)
-    exit(EXIT_FAILURE);
+        exit(EXIT_FAILURE);
 }
 
 void error_type_mismatch(DataType expected, DataType found, int line, int col) {

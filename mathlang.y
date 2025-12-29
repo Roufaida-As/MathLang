@@ -14,12 +14,6 @@ const char* token_name(int tok);
 
 /* Table des symboles globale */
 SymbolTable* global_symbol_table = NULL;
-#define YYLTYPE_IS_DECLARED 1
-#define YYLTYPE_IS_TRIVIAL 1
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include "symbol_table.h"
 
 typedef struct YYLTYPE {
     int first_line;
@@ -28,6 +22,9 @@ typedef struct YYLTYPE {
     int last_column;
 } YYLTYPE;
 
+#define YYLTYPE_IS_DECLARED 1
+#define YYLTYPE_IS_TRIVIAL 1
+%}
 
 /* ===================== */
 /* UNION                 */
@@ -165,25 +162,24 @@ declaration_variable
     : TOK_SOIT TOK_ID TOK_IN type {
         if (global_symbol_table) {
             add_symbol(global_symbol_table, $2, SYMBOL_VARIABLE, $4, 
-                      SUBTYPE_DEFAULT);
+                      SUBTYPE_DEFAULT, @2.first_line, @2.first_column);
         }
         free($2);
     }
     | TOK_SOIT TOK_ID TOK_IN type TOK_TEL_QUE TOK_ID TOK_ASSIGN expression {
-        int err_line = @7.first_line, err_col = @7.first_column;
         if (global_symbol_table) {
             if (strcmp($2, $6) == 0) {
                 if (!check_type_compatibility($4, $8.type)) {
-                    error_type_mismatch($4, $8.type, err_line, err_col);
+                    error_type_mismatch($4, $8.type, @8.first_line, @8.first_column);
                 }
                 add_symbol(global_symbol_table, $2, SYMBOL_VARIABLE, $4, 
-                          SUBTYPE_DEFAULT);
+                          SUBTYPE_DEFAULT, @2.first_line, @2.first_column);
                 SymbolEntry* entry = find_symbol(global_symbol_table, $2);
                 if (entry) {
                     mark_symbol_initialized(entry);
                 }
             } else {
-                semantic_error("Le nom de variable ne correspond pas", err_line, err_col);
+                semantic_error("Le nom de variable ne correspond pas", @2.first_line, @2.first_column);
             }
         }
         free($2);
@@ -196,16 +192,16 @@ declaration_constante
         if (global_symbol_table) {
             if (strcmp($2, $6) == 0) {
                 if (!check_type_compatibility($4, $8.type)) {
-                    error_type_mismatch($4, $8.type, line_num, col_num);
+                    error_type_mismatch($4, $8.type, @8.first_line, @8.first_column);
                 }
                 add_symbol(global_symbol_table, $2, SYMBOL_CONSTANT, $4, 
-                          SUBTYPE_DEFAULT);
+                          SUBTYPE_DEFAULT, @2.first_line, @2.first_column);
                 SymbolEntry* entry = find_symbol(global_symbol_table, $2);
                 if (entry) {
                     mark_symbol_initialized(entry);
                 }
             } else {
-                semantic_error("Le nom de constante ne correspond pas", line_num, col_num);
+                semantic_error("Le nom de constante ne correspond pas", @2.first_line, @2.first_column);
             }
         }
         free($2);
@@ -311,13 +307,13 @@ affectation
         if (global_symbol_table) {
             SymbolEntry* entry = find_symbol(global_symbol_table, $1);
             if (!entry) {
-                error_undeclared_symbol($1, line_num, col_num);
+                error_undeclared_symbol($1, @1.first_line, @1.first_column);
             } else {
                 if (entry->is_const) {
-                    error_const_assignment($1, line_num, col_num);
+                    error_const_assignment($1, @1.first_line, @1.first_column);
                 }
                 if (!check_type_compatibility(entry->type, $3.type)) {
-                    error_type_mismatch(entry->type, $3.type, line_num, col_num);
+                    error_type_mismatch(entry->type, $3.type, @3.first_line, @3.first_column);
                 }
                 mark_symbol_initialized(entry);
                 mark_symbol_used(entry);
@@ -333,12 +329,12 @@ affectation
 instruction_si
     : TOK_SI expression TOK_ALORS bloc TOK_FIN {
         if ($2.type != TYPE_B) {
-            semantic_error("La condition doit être de type B (booléen)", line_num, col_num);
+            semantic_error("La condition doit être de type B (booléen)", @2.first_line, @2.first_column);
         }
     }
     | TOK_SI expression TOK_ALORS bloc TOK_SINON bloc TOK_FIN {
         if ($2.type != TYPE_B) {
-            semantic_error("La condition doit être de type B (booléen)", line_num, col_num);
+            semantic_error("La condition doit être de type B (booléen)", @2.first_line, @2.first_column);
         }
     }
     ;
@@ -346,7 +342,7 @@ instruction_si
 instruction_tant_que
     : TOK_TANT TOK_QUE expression TOK_FAIRE bloc TOK_FIN {
         if ($3.type != TYPE_B) {
-            semantic_error("La condition doit être de type B (booléen)", line_num, col_num);
+            semantic_error("La condition doit être de type B (booléen)", @3.first_line, @3.first_column);
         }
     }
     ;
@@ -356,7 +352,7 @@ instruction_pour
         if (global_symbol_table) {
             enter_scope(global_symbol_table);
             add_symbol(global_symbol_table, $2, SYMBOL_VARIABLE, TYPE_Z,
-                       SUBTYPE_DEFAULT);
+                       SUBTYPE_DEFAULT, @2.first_line, @2.first_column);
             SymbolEntry* it = find_symbol(global_symbol_table, $2);
             if (it) mark_symbol_initialized(it);
         }
@@ -368,7 +364,7 @@ instruction_pour
         if (global_symbol_table) {
             enter_scope(global_symbol_table);
             add_symbol(global_symbol_table, $2, SYMBOL_VARIABLE, TYPE_Z,
-                       SUBTYPE_DEFAULT);
+                       SUBTYPE_DEFAULT, @2.first_line, @2.first_column);
             SymbolEntry* it = find_symbol(global_symbol_table, $2);
             if (it) mark_symbol_initialized(it);
         }
@@ -380,7 +376,7 @@ instruction_pour
         if (global_symbol_table) {
             enter_scope(global_symbol_table);
             add_symbol(global_symbol_table, $2, SYMBOL_VARIABLE, TYPE_UNKNOWN,
-                       SUBTYPE_DEFAULT);
+                       SUBTYPE_DEFAULT, @2.first_line, @2.first_column);
             SymbolEntry* it = find_symbol(global_symbol_table, $2);
             if (it) mark_symbol_initialized(it);
         }
@@ -404,7 +400,7 @@ instruction_io
         if (global_symbol_table) {
             SymbolEntry* e = find_symbol(global_symbol_table, $3);
             if (!e) {
-                error_undeclared_symbol($3, line_num, col_num);
+                error_undeclared_symbol($3, @3.first_line, @3.first_column);
             } else {
                 mark_symbol_initialized(e);
                 mark_symbol_used(e);
@@ -510,11 +506,11 @@ expr_mul
             $$.literal_float = $1.literal_float * $3.literal_float;
         }
     }
-    | expr_mul TOK_DIV_REAL expr_unary {
+ | expr_mul TOK_DIV_REAL expr_unary {
         /* Vérifier division par zéro littéral */
         if ($3.is_literal && $3.literal_float == 0.0) {
             semantic_error("Division par zéro - impossible à la compilation", 
-                          line_num, col_num);
+                          @3.first_line, @3.first_column);
         }
         $$.type = infer_binary_operation_type($1.type, $3.type, OP_DIV);
         $$.symbol = NULL;
@@ -593,12 +589,12 @@ primaire
         if (global_symbol_table) {
             SymbolEntry* entry = find_symbol(global_symbol_table, $1);
             if (!entry) {
-                error_undeclared_symbol($1, line_num, col_num);
+                error_undeclared_symbol($1, @1.first_line, @1.first_column);
                 $$.type = TYPE_ERROR;
                 $$.symbol = NULL;
             } else {
                 if (!entry->is_initialized && entry->category == SYMBOL_VARIABLE) {
-                    error_uninitialized_variable($1, line_num, col_num);
+                    error_uninitialized_variable($1, @1.first_line, @1.first_column);
                 }
                 mark_symbol_used(entry);
                 $$.type = entry->type;
@@ -615,32 +611,29 @@ primaire
         $$ = $2;
     }
     | TOK_SIN TOK_LPAREN expression TOK_RPAREN {
-        fprintf(stderr, "SIN at line %d col %d: arg=%s -> result=%s\n", 
-                line_num, col_num, type_to_string($3.type), 
-                type_to_string(infer_math_function_type(FUNC_SIN, $3.type)));
         $$.type = infer_math_function_type(FUNC_SIN, $3.type);
         $$.symbol = NULL;
         $$.is_literal = 0;
-        check_math_function_constraints(FUNC_SIN, $3.type, line_num, col_num);
+        check_math_function_constraints(FUNC_SIN, $3.type, @1.first_line, @1.first_column);
     }
     | TOK_COS TOK_LPAREN expression TOK_RPAREN {
         $$.type = infer_math_function_type(FUNC_COS, $3.type);
         $$.symbol = NULL;
         $$.is_literal = 0;
-        check_math_function_constraints(FUNC_COS, $3.type, line_num, col_num);
+        check_math_function_constraints(FUNC_COS, $3.type, @1.first_line, @1.first_column);
     }
     | TOK_EXP TOK_LPAREN expression TOK_RPAREN {
         $$.type = infer_math_function_type(FUNC_EXP, $3.type);
         $$.symbol = NULL;
         $$.is_literal = 0;
-        check_math_function_constraints(FUNC_EXP, $3.type, line_num, col_num);
+        check_math_function_constraints(FUNC_EXP, $3.type, @1.first_line, @1.first_column);
     }
     | TOK_LOG TOK_LPAREN expression TOK_RPAREN {
         $$.type = infer_math_function_type(FUNC_LOG, $3.type);
         $$.symbol = NULL;
         $$.is_literal = 0;
         if ($3.is_literal && $3.literal_float <= 0.0) {
-            semantic_error("LOG(x) indéfini pour x inférieur ou egal à 0", line_num, col_num);
+            semantic_error("LOG(x) indéfini pour x inférieur ou egal à 0", @1.first_line, @1.first_column);
         }
     }
     | TOK_SQRT TOK_LPAREN expression TOK_RPAREN {
@@ -686,7 +679,7 @@ primaire
     }
     | TOK_MAJUSCULES TOK_LPAREN expression TOK_RPAREN {
         if ($3.type != TYPE_SIGMA) {
-            error_type_mismatch(TYPE_SIGMA, $3.type, line_num, col_num);
+            error_type_mismatch(TYPE_SIGMA, $3.type, @3.first_line, @3.first_column);
             $$.type = TYPE_ERROR;
         } else {
             $$.type = TYPE_SIGMA;
@@ -696,7 +689,7 @@ primaire
     }
     | TOK_MINUSCULES TOK_LPAREN expression TOK_RPAREN {
         if ($3.type != TYPE_SIGMA) {
-            error_type_mismatch(TYPE_SIGMA, $3.type, line_num, col_num);
+            error_type_mismatch(TYPE_SIGMA, $3.type, @3.first_line, @3.first_column);
             $$.type = TYPE_ERROR;
         } else {
             $$.type = TYPE_SIGMA;

@@ -166,7 +166,9 @@ bool add_symbol(SymbolTable* table,
                 const char* name,
                 SymbolCategory category,
                 DataType type,
-                NumericSubType subtype);
+                NumericSubType subtype,
+                int line,
+                int col);
 
 SymbolEntry* find_symbol(SymbolTable* table, const char* name);
 SymbolEntry* find_symbol_in_current_scope(SymbolTable* table, const char* name);
