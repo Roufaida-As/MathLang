@@ -38,3 +38,46 @@ LIRE(z)        # z n'existe pas
 # 9) Affectation d'une chaîne à un entier
 SOIT a dans Z
 a <- "hello"
+
+# =====================================================
+# NOUVELLES VÉRIFICATIONS — Fonctions mathématiques
+# =====================================================
+
+# 10) Division par zéro
+SOIT x dans R tel que x <- 10 / 0  # ERREUR à la compilation
+
+# 11) SQRT de négatif (doit retourner C)
+SOIT c dans C tel que c <- sqrt(-9)  # OK mais avertissement
+
+# 12) LOG(0) indéfini
+SOIT r1 dans R tel que r1 <- log(0)  # ERREUR
+
+# 13) LOG(-5) indéfini
+SOIT r2 dans R tel que r2 <- log(-5)  # ERREUR
+
+# 14) ARG sur non-complexe
+SOIT phase dans R tel que phase <- arg(3.14)  # ERREUR, arg() demande C
+
+
+# 16) SIN, COS demandent nombres
+SOIT angle dans R tel que angle <- sin(1.57)  # OK
+
+# =====================================================
+# OPÉRATIONS SUR CHAÎNES
+# =====================================================
+
+# 17) Concaténation de chaînes
+SOIT str1 dans Sigma tel que str1 <- "Bonjour"
+SOIT str2 dans Sigma tel que str2 <- "Monde"
+SOIT result dans Sigma tel que result <- str1 + str2  # OK concaténation
+
+# 18) MAJUSCULES sur chaîne
+SOIT text dans Sigma tel que text <- "hello"
+SOIT upper dans Sigma tel que upper <- majuscules(text)  # OK
+
+# 19) MINUSCULES sur chaîne
+SOIT lower dans Sigma tel que lower <- minuscules(upper)  # OK
+
+# 20) MAJUSCULES sur non-chaîne (devrait être erreur)
+SOIT num dans Z tel que num <- 42
+SOIT bad dans Sigma tel que bad <- majuscules(num)  # ERREUR type Z != Sigma

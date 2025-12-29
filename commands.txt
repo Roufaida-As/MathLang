@@ -60,3 +60,4 @@ gcc -Wall -g mathlang.tab.c lex.yy.c symbol_table.c -o parser -lfl
 
 ./parser tests/test_semantic_errors.ml
 ./parser tests/test_parser.ml
+./parser tests/test_math_functions.ml

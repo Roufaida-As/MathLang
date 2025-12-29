@@ -246,6 +246,121 @@ DataType infer_unary_operation_type(DataType t, SemanticOperator op) {
 }
 
 /* ========================================================= */
+/* FONCTIONS MATHÉMATIQUES                                   */
+/* ========================================================= */
+
+DataType infer_math_function_type(MathFunction func, DataType arg_type) {
+    switch (func) {
+        /* Fonctions trigonométriques: R → R */
+        case FUNC_SIN: case FUNC_COS: case FUNC_EXP:
+            return (is_numeric_type(arg_type)) ? TYPE_R : TYPE_ERROR;
+
+        /* Logarithme: R+ → R (ou C si arg négatif) */
+        case FUNC_LOG:
+            return (is_numeric_type(arg_type)) ? TYPE_R : TYPE_ERROR;
+
+        /* Racine carrée: 
+           - Si arg ≥ 0 (littéral) → R
+           - Si arg < 0 (littéral) → C
+           - Si arg variable → R (assume ≥ 0)
+        */
+        case FUNC_SQRT:
+            return (is_numeric_type(arg_type)) ? TYPE_R : TYPE_ERROR;
+
+        /* Valeur absolue: préserve le type */
+        case FUNC_ABS:
+            return (is_numeric_type(arg_type)) ? arg_type : TYPE_ERROR;
+
+        /* Floor, Ceil, Round: R → Z */
+        case FUNC_FLOOR: case FUNC_CEIL: case FUNC_ROUND:
+            return (is_numeric_type(arg_type)) ? TYPE_Z : TYPE_ERROR;
+
+        /* Partie réelle et imaginaire: C → R */
+        case FUNC_RE: case FUNC_IM:
+            return (arg_type == TYPE_C || arg_type == TYPE_R || arg_type == TYPE_Z) 
+                   ? TYPE_R : TYPE_ERROR;
+
+        /* Argument (phase): C → R */
+        case FUNC_ARG:
+            return (arg_type == TYPE_C) ? TYPE_R : TYPE_ERROR;
+
+        /* Opérations sur chaînes */
+        case FUNC_MAJUSCULES: case FUNC_MINUSCULES: case FUNC_LENGTH:
+            return (arg_type == TYPE_SIGMA) ? TYPE_SIGMA : TYPE_ERROR;
+
+        case FUNC_CONCAT:
+            return (arg_type == TYPE_SIGMA) ? TYPE_SIGMA : TYPE_ERROR;
+
+        default:
+            return TYPE_ERROR;
+    }
+}
+
+void check_math_function_constraints(MathFunction func, DataType arg_type,
+                                     int line, int col) {
+    char msg[256];
+
+    switch (func) {
+        case FUNC_LOG:
+            if (arg_type == TYPE_Z) {
+                snprintf(msg, sizeof(msg),
+                        "logarithme non défini pour Z (entiers) - attendu R");
+                semantic_warning(msg, line, col);
+            }
+            break;
+
+        case FUNC_SQRT:
+            if (arg_type == TYPE_C) {
+                snprintf(msg, sizeof(msg),
+                        "SQRT sur nombre complexe - résultat en C");
+            }
+            break;
+
+        case FUNC_ARG:
+            if (arg_type != TYPE_C) {
+                snprintf(msg, sizeof(msg),
+                        "ARG(argument/phase) requiert type C, pas %s",
+                        type_to_string(arg_type));
+                semantic_error(msg, line, col);
+            }
+            break;
+
+        default:
+            break;
+    }
+}
+
+/* ========================================================= */
+/* OPÉRATIONS SUR CHAÎNES                                     */
+/* ========================================================= */
+
+DataType infer_string_operation_type(DataType left, DataType right,
+                                     SemanticOperator op) {
+    /* Concaténation: SIGMA + SIGMA → SIGMA */
+    if (op == OP_ADD) {
+        if (left == TYPE_SIGMA && right == TYPE_SIGMA)
+            return TYPE_SIGMA;
+        /* Conversion possible: autre type → SIGMA (cast implicite) */
+        if (left == TYPE_SIGMA || right == TYPE_SIGMA)
+            return TYPE_SIGMA;
+        return TYPE_ERROR;
+    }
+    return TYPE_ERROR;
+}
+
+/* ========================================================= */
+/* DÉTECTION DIVISION PAR ZÉRO                               */
+/* ========================================================= */
+
+void check_division_by_zero(int is_literal_divisor, int divisor_value,
+                           int line, int col) {
+    if (is_literal_divisor && divisor_value == 0) {
+        semantic_error("Division par zéro - impossible à la compilation", 
+                      line, col);
+    }
+}
+
+/* ========================================================= */
 /* ERREURS                                                   */
 /* ========================================================= */
 
