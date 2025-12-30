@@ -478,22 +478,32 @@ expr_and
 
 expr_cmp
     : expr_cmp TOK_EQ expr_add {
-        $$.type = infer_binary_operation_type($1.type, $3.type, OP_EQ);
+        if (!check_comparable_types($1.type, $3.type)) {
+            error_type_mismatch($1.type, $3.type, @2.first_line, @2.first_column);
+        }
+        $$.type = TYPE_B;             
         $$.symbol = NULL;
         $$.is_literal = 0;
     }
     | expr_cmp TOK_LT expr_add {
-        $$.type = infer_binary_operation_type($1.type, $3.type, OP_LT);
+        if (!check_comparable_types($1.type, $3.type)) {
+            error_type_mismatch($1.type, $3.type, @2.first_line, @2.first_column);
+        }
+        $$.type = TYPE_B;            
         $$.symbol = NULL;
         $$.is_literal = 0;
     }
     | expr_cmp TOK_GT expr_add {
-        $$.type = infer_binary_operation_type($1.type, $3.type, OP_GT);
+        if (!check_comparable_types($1.type, $3.type)) {
+            error_type_mismatch($1.type, $3.type, @2.first_line, @2.first_column);
+        }
+        $$.type = TYPE_B;          
         $$.symbol = NULL;
         $$.is_literal = 0;
     }
     | expr_add { $$ = $1; }
     ;
+
 
 expr_add
     : expr_add TOK_PLUS expr_mul {
