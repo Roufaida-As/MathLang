@@ -82,8 +82,7 @@ typedef struct YYLTYPE {
 
 /* Types non-terminaux */
 %type <datatype> type type_base type_arrow
-%type <expr_info> expression expr_or expr_xor expr_and expr_cmp expr_add expr_mul expr_unary primaire
-
+%type <expr_info> expression expr_or expr_xor expr_and expr_cmp expr_add expr_mul expr_pow expr_unary primaire
 /* ===================== */
 /* MATHS                 */
 /* ===================== */
@@ -516,9 +515,37 @@ expr_mul
         $$.symbol = NULL;
         $$.is_literal = 0;
     }
-    | expr_unary { $$ = $1; }
+ | expr_mul TOK_DIV expr_unary {
+        /* Vérifier division entière par zéro littéral */
+        if ($3.is_literal && $3.literal_int == 0) {
+            semantic_error("Division entière par zéro - impossible à la compilation", 
+                          @3.first_line, @3.first_column);
+        }
+        $$.type = infer_binary_operation_type($1.type, $3.type, OP_DIV);
+        $$.symbol = NULL;
+        $$.is_literal = 0;
+    }
+ | expr_mul TOK_MOD expr_unary {
+        /* Vérifier modulo par zéro littéral */
+        if ($3.is_literal && $3.literal_int == 0) {
+            semantic_error("Modulo par zéro - impossible à la compilation", 
+                          @3.first_line, @3.first_column);
+        }
+        $$.type = infer_binary_operation_type($1.type, $3.type, OP_MOD);
+        $$.symbol = NULL;
+        $$.is_literal = 0;
+    }
+    | expr_pow { $$ = $1; }
     ;
 
+expr_pow
+    : expr_unary TOK_POWER expr_pow {
+        $$.type = infer_binary_operation_type($1.type, $3.type, OP_POW);
+        $$.symbol = NULL;
+        $$.is_literal = 0;
+    }
+    | expr_unary { $$ = $1; }
+    ;
 expr_unary
     : TOK_MINUS expr_unary %prec UMINUS {
         $$.type = infer_unary_operation_type($2.type, OP_SUB);
@@ -772,6 +799,9 @@ const char* token_name(int tok) {
         case TOK_MINUS: return "TOK_MINUS";
         case TOK_MULT: return "TOK_MULT";
         case TOK_DIV_REAL: return "TOK_DIV_REAL";
+        case TOK_DIV: return "TOK_DIV";
+        case TOK_MOD: return "TOK_MOD";
+        case TOK_POWER: return "TOK_POWER";
 
         case TOK_EQ: return "TOK_EQ";
         case TOK_NEQ: return "TOK_NEQ";
