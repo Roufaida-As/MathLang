@@ -101,7 +101,7 @@ typedef struct YYLTYPE {
 
 /* Types non-terminaux */
 %type <datatype> type type_base type_arrow
-%type <expr_info> expression expr_or expr_xor expr_and expr_cmp expr_add expr_mul expr_unary primaire
+%type <expr_info> expression expr_or expr_xor expr_and expr_cmp expr_add expr_mul expr_unary primaire expr_pow
 
 
 
@@ -481,7 +481,35 @@ expr_cmp
         if (!check_comparable_types($1.type, $3.type)) {
             error_type_mismatch($1.type, $3.type, @2.first_line, @2.first_column);
         }
-        $$.type = TYPE_B;             
+        
+        // GÉNÉRATION DE QUADRUPLET
+        char* t = newTemp();
+        char* addr1 = expr_to_addr($1);
+        char* addr2 = expr_to_addr($3);
+        createQuad(quadList, QUAD_EQ, addr1, addr2, t);
+        $$.addr = t;
+        free(addr1);
+        free(addr2);
+        
+        $$.type = TYPE_B;
+        $$.symbol = NULL;
+        $$.is_literal = 0;
+    }
+    | expr_cmp TOK_NEQ expr_add {
+        if (!check_comparable_types($1.type, $3.type)) {
+            error_type_mismatch($1.type, $3.type, @2.first_line, @2.first_column);
+        }
+        
+        // GÉNÉRATION DE QUADRUPLET
+        char* t = newTemp();
+        char* addr1 = expr_to_addr($1);
+        char* addr2 = expr_to_addr($3);
+        createQuad(quadList, QUAD_NEQ, addr1, addr2, t);
+        $$.addr = t;
+        free(addr1);
+        free(addr2);
+        
+        $$.type = TYPE_B;
         $$.symbol = NULL;
         $$.is_literal = 0;
     }
@@ -489,7 +517,17 @@ expr_cmp
         if (!check_comparable_types($1.type, $3.type)) {
             error_type_mismatch($1.type, $3.type, @2.first_line, @2.first_column);
         }
-        $$.type = TYPE_B;            
+        
+        // GÉNÉRATION DE QUADRUPLET
+        char* t = newTemp();
+        char* addr1 = expr_to_addr($1);
+        char* addr2 = expr_to_addr($3);
+        createQuad(quadList, QUAD_LT, addr1, addr2, t);
+        $$.addr = t;
+        free(addr1);
+        free(addr2);
+        
+        $$.type = TYPE_B;
         $$.symbol = NULL;
         $$.is_literal = 0;
     }
@@ -497,7 +535,53 @@ expr_cmp
         if (!check_comparable_types($1.type, $3.type)) {
             error_type_mismatch($1.type, $3.type, @2.first_line, @2.first_column);
         }
-        $$.type = TYPE_B;          
+        
+        // GÉNÉRATION DE QUADRUPLET
+        char* t = newTemp();
+        char* addr1 = expr_to_addr($1);
+        char* addr2 = expr_to_addr($3);
+        createQuad(quadList, QUAD_GT, addr1, addr2, t);
+        $$.addr = t;
+        free(addr1);
+        free(addr2);
+        
+        $$.type = TYPE_B;
+        $$.symbol = NULL;
+        $$.is_literal = 0;
+    }
+    | expr_cmp TOK_LEQ expr_add {
+        if (!check_comparable_types($1.type, $3.type)) {
+            error_type_mismatch($1.type, $3.type, @2.first_line, @2.first_column);
+        }
+        
+        // GÉNÉRATION DE QUADRUPLET
+        char* t = newTemp();
+        char* addr1 = expr_to_addr($1);
+        char* addr2 = expr_to_addr($3);
+        createQuad(quadList, QUAD_LEQ, addr1, addr2, t);
+        $$.addr = t;
+        free(addr1);
+        free(addr2);
+        
+        $$.type = TYPE_B;
+        $$.symbol = NULL;
+        $$.is_literal = 0;
+    }
+    | expr_cmp TOK_GEQ expr_add {
+        if (!check_comparable_types($1.type, $3.type)) {
+            error_type_mismatch($1.type, $3.type, @2.first_line, @2.first_column);
+        }
+        
+        // GÉNÉRATION DE QUADRUPLET
+        char* t = newTemp();
+        char* addr1 = expr_to_addr($1);
+        char* addr2 = expr_to_addr($3);
+        createQuad(quadList, QUAD_GEQ, addr1, addr2, t);
+        $$.addr = t;
+        free(addr1);
+        free(addr2);
+        
+        $$.type = TYPE_B;
         $$.symbol = NULL;
         $$.is_literal = 0;
     }
@@ -553,7 +637,7 @@ expr_add
     ;
 
 expr_mul
-    : expr_mul TOK_MULT expr_unary {
+    : expr_mul TOK_MULT expr_pow {
         $$.type = infer_binary_operation_type($1.type, $3.type, OP_MUL);
         
         // GÉNÉRATION DE QUADRUPLET
@@ -572,7 +656,7 @@ expr_mul
             $$.literal_float = $1.literal_float * $3.literal_float;
         }
     }
-    | expr_mul TOK_DIV_REAL expr_unary {
+    | expr_mul TOK_DIV_REAL expr_pow {
         /* Vérifier division par zéro littéral */
         if ($3.is_literal && $3.literal_float == 0.0) {
             semantic_error("Division par zéro - impossible à la compilation", 
@@ -592,23 +676,43 @@ expr_mul
         $$.symbol = NULL;
         $$.is_literal = 0;
     }
- | expr_mul TOK_DIV expr_unary {
+    | expr_mul TOK_DIV expr_pow {
         /* Vérifier division entière par zéro littéral */
         if ($3.is_literal && $3.literal_int == 0) {
             semantic_error("Division entière par zéro - impossible à la compilation", 
                           @3.first_line, @3.first_column);
         }
         $$.type = infer_binary_operation_type($1.type, $3.type, OP_DIV);
+        
+        // GÉNÉRATION DE QUADRUPLET
+        char* t = newTemp();
+        char* addr1 = expr_to_addr($1);
+        char* addr2 = expr_to_addr($3);
+        createQuad(quadList, QUAD_DIV_INT, addr1, addr2, t);
+        $$.addr = t;
+        free(addr1);
+        free(addr2);
+        
         $$.symbol = NULL;
         $$.is_literal = 0;
     }
- | expr_mul TOK_MOD expr_unary {
+    | expr_mul TOK_MOD expr_pow {
         /* Vérifier modulo par zéro littéral */
         if ($3.is_literal && $3.literal_int == 0) {
             semantic_error("Modulo par zéro - impossible à la compilation", 
                           @3.first_line, @3.first_column);
         }
         $$.type = infer_binary_operation_type($1.type, $3.type, OP_MOD);
+        
+        // GÉNÉRATION DE QUADRUPLET
+        char* t = newTemp();
+        char* addr1 = expr_to_addr($1);
+        char* addr2 = expr_to_addr($3);
+        createQuad(quadList, QUAD_MOD, addr1, addr2, t);
+        $$.addr = t;
+        free(addr1);
+        free(addr2);
+        
         $$.symbol = NULL;
         $$.is_literal = 0;
     }
@@ -618,6 +722,16 @@ expr_mul
 expr_pow
     : expr_unary TOK_POWER expr_pow {
         $$.type = infer_binary_operation_type($1.type, $3.type, OP_POW);
+        
+        // GÉNÉRATION DE QUADRUPLET
+        char* t = newTemp();
+        char* addr1 = expr_to_addr($1);
+        char* addr2 = expr_to_addr($3);
+        createQuad(quadList, QUAD_POW, addr1, addr2, t);
+        $$.addr = t;
+        free(addr1);
+        free(addr2);
+        
         $$.symbol = NULL;
         $$.is_literal = 0;
     }

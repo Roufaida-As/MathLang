@@ -2,6 +2,7 @@
 #define QUADRUPLET_H
 
 #include <stdbool.h>
+#include "symbol_table.h"
 
 /* ========================================================= */
 /*                   TYPES DE QUADRUPLETS                     */
@@ -12,7 +13,8 @@ typedef enum {
     QUAD_ADD,      // +
     QUAD_SUB,      // -
     QUAD_MUL,      // *
-    QUAD_DIV,      // /
+    QUAD_DIV,      // / (division réelle)
+    QUAD_DIV_INT,  // div (division entière)
     QUAD_MOD,      // mod
     QUAD_POW,      // ^
     QUAD_NEG,      // négation unaire
@@ -186,5 +188,6 @@ void initControlStacks(void);
 
 const char* quadOpToString(QuadOp op);
 char* stringDuplicate(const char* str);
+bool check_comparable_types(DataType left, DataType right);
 
 #endif /* QUADRUPLET_H */

@@ -99,6 +99,7 @@ const char* quadOpToString(QuadOp op) {
         case QUAD_SUB: return "-";
         case QUAD_MUL: return "*";
         case QUAD_DIV: return "/";
+        case QUAD_DIV_INT: return "DIV";
         case QUAD_MOD: return "MOD";
         case QUAD_POW: return "^";
         case QUAD_NEG: return "NEG";
