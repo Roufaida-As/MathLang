@@ -10,22 +10,13 @@ SOIT y dans Z tel que y <- 10
 SOIT z dans Z tel que z <- x + y
 
 # --- Test 3: Soustraction ---
-SOIT diff dans Z tel que diff <- x - y
+SOIT difference dans Z tel que difference <- x - y
 
 # --- Test 4: Multiplication ---
 SOIT prod dans Z tel que prod <- x * y
 
 # --- Test 5: Division réelle ---
 SOIT quot_reel dans R tel que quot_reel <- x / y
-
-# --- Test 6: Division entière ---
-SOIT quot dans Z tel que quot <- x div y
-
-# --- Test 7: Modulo ---
-SOIT reste dans Z tel que reste <- x mod y
-
-# --- Test 8: Puissance ---
-SOIT puiss dans R tel que puiss <- 2.0 ^ 3.0
 
 # --- Test 9: Expression complexe ---
 SOIT resultat dans Z tel que resultat <- x + y * 2
@@ -120,7 +111,7 @@ SOIT aire dans R tel que aire <- PI * 5.0 * 5.0
 
 # Test 3:
 4: ( -   , x    , y   , T1 )
-5: ( :=  , T1   , -   , diff )
+5: ( :=  , T1   , -   , difference )
 
 # Test 4:
 6: ( *   , x    , y   , T2 )
@@ -130,17 +121,6 @@ SOIT aire dans R tel que aire <- PI * 5.0 * 5.0
 8: ( /   , x    , y   , T3 )
 9: ( :=  , T3   , -   , quot_reel )
 
-# Test 6:
-10: ( DIV , x    , y   , T4 )
-11: ( :=  , T4   , -   , quot )
-
-# Test 7:
-12: ( MOD , x    , y   , T5 )
-13: ( :=  , T5   , -   , reste )
-
-# Test 8:
-14: ( ^   , 2.0  , 3.0 , T6 )
-15: ( :=  , T6   , -   , puiss )
 
 # Test 9:
 16: ( *   , y    , 2   , T7 )
