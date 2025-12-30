@@ -3,6 +3,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include "symbol_table.h"
+#include "quadruplet.h"
+#include "expr_info.h"
 
 extern int yylex();
 extern int line_num;
@@ -14,6 +16,28 @@ const char* token_name(int tok);
 
 /* Table des symboles globale */
 SymbolTable* global_symbol_table = NULL;
+QuadList* quadList = NULL;
+
+
+char* expr_to_addr(ExprInfo e) {
+    if (e.addr) return e.addr;
+    
+    char* temp = malloc(32);
+    if (e.is_literal) {
+        if (e.type == TYPE_Z) {
+            sprintf(temp, "%d", e.literal_int);
+        } else if (e.type == TYPE_R) {
+            sprintf(temp, "%g", e.literal_float);
+        } else if (e.type == TYPE_B) {
+            sprintf(temp, "%d", e.literal_int);
+        } else {
+            strcpy(temp, "0");
+        }
+    } else {
+        strcpy(temp, "temp");
+    }
+    return temp;
+}
 
 typedef struct YYLTYPE {
     int first_line;
@@ -29,19 +53,14 @@ typedef struct YYLTYPE {
 /* ===================== */
 /* UNION                 */
 /* ===================== */
+
 %union {
     int intval;
     double floatval;
     char charval;
     char* strval;
     DataType datatype;
-    struct {
-        DataType type;
-        SymbolEntry* symbol;
-        int is_literal;
-        int literal_int;
-        double literal_float;
-    } expr_info;
+    ExprInfo expr_info;
 }
 
 %locations
@@ -83,6 +102,8 @@ typedef struct YYLTYPE {
 /* Types non-terminaux */
 %type <datatype> type type_base type_arrow
 %type <expr_info> expression expr_or expr_xor expr_and expr_cmp expr_add expr_mul expr_unary primaire
+
+
 
 /* ===================== */
 /* MATHS                 */
@@ -315,6 +336,11 @@ affectation
                 if (!check_type_compatibility(entry->type, $3.type)) {
                     error_type_mismatch(entry->type, $3.type, @3.first_line, @3.first_column);
                 }
+                // GÉNÉRATION DE QUADRUPLET
+                char* addr = expr_to_addr($3);
+                createQuad(quadList, QUAD_ASSIGN, addr, NULL, $1);
+                free(addr);
+                
                 mark_symbol_initialized(entry);
                 mark_symbol_used(entry);
             }
@@ -477,6 +503,16 @@ expr_add
         } else {
             $$.type = infer_binary_operation_type($1.type, $3.type, OP_ADD);
         }
+        
+        // GÉNÉRATION DE QUADRUPLET
+        char* t = newTemp();
+        char* addr1 = expr_to_addr($1);
+        char* addr2 = expr_to_addr($3);
+        createQuad(quadList, QUAD_ADD, addr1, addr2, t);
+        $$.addr = t;
+        free(addr1);
+        free(addr2);
+        
         $$.symbol = NULL;
         $$.is_literal = ($1.is_literal && $3.is_literal) ? 1 : 0;
         if ($$.is_literal) {
@@ -486,6 +522,16 @@ expr_add
     }
     | expr_add TOK_MINUS expr_mul {
         $$.type = infer_binary_operation_type($1.type, $3.type, OP_SUB);
+        
+        // GÉNÉRATION DE QUADRUPLET
+        char* t = newTemp();
+        char* addr1 = expr_to_addr($1);
+        char* addr2 = expr_to_addr($3);
+        createQuad(quadList, QUAD_SUB, addr1, addr2, t);
+        $$.addr = t;
+        free(addr1);
+        free(addr2);
+        
         $$.symbol = NULL;
         $$.is_literal = ($1.is_literal && $3.is_literal) ? 1 : 0;
         if ($$.is_literal) {
@@ -499,6 +545,16 @@ expr_add
 expr_mul
     : expr_mul TOK_MULT expr_unary {
         $$.type = infer_binary_operation_type($1.type, $3.type, OP_MUL);
+        
+        // GÉNÉRATION DE QUADRUPLET
+        char* t = newTemp();
+        char* addr1 = expr_to_addr($1);
+        char* addr2 = expr_to_addr($3);
+        createQuad(quadList, QUAD_MUL, addr1, addr2, t);
+        $$.addr = t;
+        free(addr1);
+        free(addr2);
+        
         $$.symbol = NULL;
         $$.is_literal = ($1.is_literal && $3.is_literal) ? 1 : 0;
         if ($$.is_literal) {
@@ -506,13 +562,23 @@ expr_mul
             $$.literal_float = $1.literal_float * $3.literal_float;
         }
     }
- | expr_mul TOK_DIV_REAL expr_unary {
+    | expr_mul TOK_DIV_REAL expr_unary {
         /* Vérifier division par zéro littéral */
         if ($3.is_literal && $3.literal_float == 0.0) {
             semantic_error("Division par zéro - impossible à la compilation", 
                           @3.first_line, @3.first_column);
         }
         $$.type = infer_binary_operation_type($1.type, $3.type, OP_DIV);
+        
+        // GÉNÉRATION DE QUADRUPLET
+        char* t = newTemp();
+        char* addr1 = expr_to_addr($1);
+        char* addr2 = expr_to_addr($3);
+        createQuad(quadList, QUAD_DIV, addr1, addr2, t);
+        $$.addr = t;
+        free(addr1);
+        free(addr2);
+        
         $$.symbol = NULL;
         $$.is_literal = 0;
     }
@@ -542,6 +608,11 @@ primaire
         $$.is_literal = 1;
         $$.literal_int = $1;
         $$.literal_float = (double)$1;
+
+         // GÉNÉRATION ADRESSE
+        char* addr = malloc(32);
+        sprintf(addr, "%d", $1);
+        $$.addr = addr;
     }
     | TOK_FLOAT {
         $$.type = TYPE_R;
@@ -585,13 +656,14 @@ primaire
         $$.literal_int = 0;
         $$.literal_float = 0.0;
     }
-    | TOK_ID {
+       | TOK_ID {
         if (global_symbol_table) {
             SymbolEntry* entry = find_symbol(global_symbol_table, $1);
             if (!entry) {
                 error_undeclared_symbol($1, @1.first_line, @1.first_column);
                 $$.type = TYPE_ERROR;
                 $$.symbol = NULL;
+                $$.addr = NULL;
             } else {
                 if (!entry->is_initialized && entry->category == SYMBOL_VARIABLE) {
                     error_uninitialized_variable($1, @1.first_line, @1.first_column);
@@ -599,10 +671,12 @@ primaire
                 mark_symbol_used(entry);
                 $$.type = entry->type;
                 $$.symbol = entry;
+                $$.addr = strdup($1);  // ← AJOUTEZ CETTE LIGNE
             }
         } else {
             $$.type = TYPE_UNKNOWN;
             $$.symbol = NULL;
+            $$.addr = NULL;
         }
         $$.is_literal = 0;
         free($1);
@@ -824,6 +898,11 @@ int main(int argc, char **argv) {
 
     /* Initialiser la table des symboles */
     global_symbol_table = init_symbol_table();
+
+    /* INITIALISER LES QUADRUPLETS */
+    quadList = initQuadList();
+    initControlStacks();
+
     set_semantic_error_mode(SEMANTIC_NON_FATAL);
 
     if (argc < 2) {
@@ -908,8 +987,12 @@ int main(int argc, char **argv) {
     /* Afficher la table des symboles finale */
     print_symbol_table(global_symbol_table);
 
+     /* AFFICHER LES QUADRUPLETS */
+    printQuadruplets(quadList);
+
     /* Libérer la mémoire */
     free_symbol_table(global_symbol_table);
+     freeQuadList(quadList); 
     return 0;
 }
 
