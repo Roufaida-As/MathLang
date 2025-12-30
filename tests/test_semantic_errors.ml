@@ -44,7 +44,10 @@ a <- "hello"
 # =====================================================
 
 # 10) Division par zéro
-SOIT x dans R tel que x <- 10 / 0  # ERREUR à la compilation
+SOIT x dans R tel que x <- 10 div 0
+AFFICHER(10 div 2)
+AFFICHER(10 ^ 2)
+AFFICHER(10 mod 2)
 
 # 11) SQRT de négatif (doit retourner C)
 SOIT c dans C tel que c <- sqrt(-9)  # OK mais avertissement
