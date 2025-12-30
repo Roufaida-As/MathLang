@@ -18,6 +18,15 @@ SOIT prod dans Z tel que prod <- x * y
 # --- Test 5: Division réelle ---
 SOIT quot_reel dans R tel que quot_reel <- x / y
 
+# --- Test 6: Division entière (div) ---
+SOIT quotient dans Z tel que quotient <- (x div y)
+
+# --- Test 7: Modulo (mod) ---
+SOIT modulo dans Z tel que modulo <- (x mod y)
+
+# --- Test 8: Puissance ---
+SOIT puiss dans R tel que puiss <- (2.0 ^ 3.0)
+
 # --- Test 9: Expression complexe ---
 SOIT resultat dans Z tel que resultat <- x + y * 2
 
@@ -121,6 +130,17 @@ SOIT aire dans R tel que aire <- PI * 5.0 * 5.0
 8: ( /   , x    , y   , T3 )
 9: ( :=  , T3   , -   , quot_reel )
 
+# Test 6:
+10: ( DIV , x    , y   , T4 )
+11: ( :=  , T4   , -   , quot )
+
+# Test 7:
+12: ( MOD , x    , y   , T5 )
+13: ( :=  , T5   , -   , reste )
+
+# Test 8:
+14: ( ^   , 2.0  , 3.0 , T6 )
+15: ( :=  , T6   , -   , puiss )
 
 # Test 9:
 16: ( *   , y    , 2   , T7 )
