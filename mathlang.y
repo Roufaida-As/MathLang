@@ -20,9 +20,18 @@ QuadList* quadList = NULL;
 
 
 char* expr_to_addr(ExprInfo e) {
-    if (e.addr) return e.addr;
-    
+    if (!e.addr) {
+        fprintf(stderr, "Erreur: expr_to_addr appelé avec e.addr == NULL\n");
+        return NULL;
+    }
+    if (e.addr) {
+        // Always return a heap-allocated copy
+        char* copy = malloc(strlen(e.addr) + 1);
+        if (copy) strcpy(copy, e.addr);
+        return copy;
+    }
     char* temp = malloc(32);
+    if (!temp) return NULL;
     if (e.is_literal) {
         if (e.type == TYPE_Z) {
             sprintf(temp, "%d", e.literal_int);
@@ -185,7 +194,7 @@ declaration_variable
             add_symbol(global_symbol_table, $2, SYMBOL_VARIABLE, $4, 
                       SUBTYPE_DEFAULT, @2.first_line, @2.first_column);
         }
-        free($2);
+        // free($2); // Removed to prevent double free
     }
     | TOK_SOIT TOK_ID TOK_IN type TOK_TEL_QUE TOK_ID TOK_ASSIGN expression {
         if (global_symbol_table) {
@@ -204,7 +213,7 @@ declaration_variable
             }
         }
         free($2);
-        free($6);
+        // free($6); // Removed to prevent double free
     }
     ;
 
@@ -225,8 +234,8 @@ declaration_constante
                 semantic_error("Le nom de constante ne correspond pas", @2.first_line, @2.first_column);
             }
         }
-        free($2);
-        free($6);
+        // free($2); // Removed to prevent double free
+        // free($6); // Removed to prevent double free
     }
     ;
 
@@ -325,27 +334,31 @@ instruction
 /* ===================== */
 affectation
     : TOK_ID TOK_ASSIGN expression {
+        int semantic_error = 0;
         if (global_symbol_table) {
             SymbolEntry* entry = find_symbol(global_symbol_table, $1);
             if (!entry) {
                 error_undeclared_symbol($1, @1.first_line, @1.first_column);
+                semantic_error = 1;
             } else {
                 if (entry->is_const) {
                     error_const_assignment($1, @1.first_line, @1.first_column);
+                    semantic_error = 1;
                 }
                 if (!check_type_compatibility(entry->type, $3.type)) {
                     error_type_mismatch(entry->type, $3.type, @3.first_line, @3.first_column);
+                    semantic_error = 1;
                 }
-                // GÉNÉRATION DE QUADRUPLET
-                char* addr = expr_to_addr($3);
-                createQuad(quadList, QUAD_ASSIGN, addr, NULL, $1);
-                free(addr);
-                
-                mark_symbol_initialized(entry);
-                mark_symbol_used(entry);
+                if (!semantic_error) {
+                    // GÉNÉRATION DE QUADRUPLET
+                    char* addr = expr_to_addr($3);
+                    createQuad(quadList, QUAD_ASSIGN, addr, NULL, $1);
+                    free(addr);
+                    mark_symbol_initialized(entry);
+                    mark_symbol_used(entry);
+                }
             }
         }
-        free($1);
     }
     ;
 
@@ -602,10 +615,12 @@ expr_add
         char* t = newTemp();
         char* addr1 = expr_to_addr($1);
         char* addr2 = expr_to_addr($3);
-        createQuad(quadList, QUAD_ADD, addr1, addr2, t);
+        if (addr1 && addr2) {
+            createQuad(quadList, QUAD_ADD, addr1, addr2, t);
+        }
         $$.addr = t;
-        free(addr1);
-        free(addr2);
+        if (addr1) free(addr1);
+        if (addr2) free(addr2);
         
         $$.symbol = NULL;
         $$.is_literal = ($1.is_literal && $3.is_literal) ? 1 : 0;
@@ -772,6 +787,9 @@ primaire
         $$.is_literal = 1;
         $$.literal_int = (int)$1;
         $$.literal_float = $1;
+        char* addr = malloc(32);
+        sprintf(addr, "%g", $1);
+        $$.addr = addr;
     }
     | TOK_STRING {
         $$.type = TYPE_SIGMA;
@@ -779,6 +797,7 @@ primaire
         $$.is_literal = 0;
         $$.literal_int = 0;
         $$.literal_float = 0.0;
+        $$.addr = strdup($1);
     }
     | TOK_CHAR {
         $$.type = TYPE_CHAR;
@@ -786,6 +805,9 @@ primaire
         $$.is_literal = 0;
         $$.literal_int = 0;
         $$.literal_float = 0.0;
+        char* addr = malloc(4);
+        sprintf(addr, "'%c'", $1);
+        $$.addr = addr;
     }
     | TOK_COMPLEX {
         $$.type = TYPE_C;
@@ -793,6 +815,7 @@ primaire
         $$.is_literal = 0;
         $$.literal_int = 0;
         $$.literal_float = 0.0;
+        $$.addr = strdup($1);
     }
     | TOK_TRUE {
         $$.type = TYPE_B;
@@ -800,6 +823,9 @@ primaire
         $$.is_literal = 1;
         $$.literal_int = 1;
         $$.literal_float = 1.0;
+        char* addr = malloc(8);
+        sprintf(addr, "true");
+        $$.addr = addr;
     }
     | TOK_FALSE {
         $$.type = TYPE_B;
@@ -807,6 +833,9 @@ primaire
         $$.is_literal = 1;
         $$.literal_int = 0;
         $$.literal_float = 0.0;
+        char* addr = malloc(8);
+        sprintf(addr, "false");
+        $$.addr = addr;
     }
        | TOK_ID {
         if (global_symbol_table) {
@@ -841,18 +870,33 @@ primaire
         $$.symbol = NULL;
         $$.is_literal = 0;
         check_math_function_constraints(FUNC_SIN, $3.type, @1.first_line, @1.first_column);
+        char* t = newTemp();
+        char* arg_addr = expr_to_addr($3);
+        createQuad(quadList, QUAD_SIN, arg_addr, NULL, t);
+        $$.addr = t;
+        free(arg_addr);
     }
     | TOK_COS TOK_LPAREN expression TOK_RPAREN {
         $$.type = infer_math_function_type(FUNC_COS, $3.type);
         $$.symbol = NULL;
         $$.is_literal = 0;
         check_math_function_constraints(FUNC_COS, $3.type, @1.first_line, @1.first_column);
+        char* t = newTemp();
+        char* arg_addr = expr_to_addr($3);
+        createQuad(quadList, QUAD_COS, arg_addr, NULL, t);
+        $$.addr = t;
+        free(arg_addr);
     }
     | TOK_EXP TOK_LPAREN expression TOK_RPAREN {
         $$.type = infer_math_function_type(FUNC_EXP, $3.type);
         $$.symbol = NULL;
         $$.is_literal = 0;
         check_math_function_constraints(FUNC_EXP, $3.type, @1.first_line, @1.first_column);
+        char* t = newTemp();
+        char* arg_addr = expr_to_addr($3);
+        createQuad(quadList, QUAD_EXP, arg_addr, NULL, t);
+        $$.addr = t;
+        free(arg_addr);
     }
     | TOK_LOG TOK_LPAREN expression TOK_RPAREN {
         $$.type = infer_math_function_type(FUNC_LOG, $3.type);
@@ -861,47 +905,92 @@ primaire
         if ($3.is_literal && $3.literal_float <= 0.0) {
             semantic_error("LOG(x) indéfini pour x inférieur ou egal à 0", @1.first_line, @1.first_column);
         }
+        char* t = newTemp();
+        char* arg_addr = expr_to_addr($3);
+        createQuad(quadList, QUAD_LOG, arg_addr, NULL, t);
+        $$.addr = t;
+        free(arg_addr);
     }
     | TOK_SQRT TOK_LPAREN expression TOK_RPAREN {
         $$.type = TYPE_R;
         $$.symbol = NULL;
         $$.is_literal = 0;
+        char* t = newTemp();
+        char* arg_addr = expr_to_addr($3);
+        createQuad(quadList, QUAD_SQRT, arg_addr, NULL, t);
+        $$.addr = t;
+        free(arg_addr);
     }
     | TOK_ABS TOK_LPAREN expression TOK_RPAREN {
         $$.type = infer_math_function_type(FUNC_ABS, $3.type);
         $$.symbol = NULL;
         $$.is_literal = 0;
+        char* t = newTemp();
+        char* arg_addr = expr_to_addr($3);
+        createQuad(quadList, QUAD_ABS, arg_addr, NULL, t);
+        $$.addr = t;
+        free(arg_addr);
     }
     | TOK_FLOOR TOK_LPAREN expression TOK_RPAREN {
         $$.type = infer_math_function_type(FUNC_FLOOR, $3.type);
         $$.symbol = NULL;
         $$.is_literal = 0;
+        char* t = newTemp();
+        char* arg_addr = expr_to_addr($3);
+        createQuad(quadList, QUAD_FLOOR, arg_addr, NULL, t);
+        $$.addr = t;
+        free(arg_addr);
     }
     | TOK_CEIL TOK_LPAREN expression TOK_RPAREN {
         $$.type = infer_math_function_type(FUNC_CEIL, $3.type);
         $$.symbol = NULL;
         $$.is_literal = 0;
+        char* t = newTemp();
+        char* arg_addr = expr_to_addr($3);
+        createQuad(quadList, QUAD_CEIL, arg_addr, NULL, t);
+        $$.addr = t;
+        free(arg_addr);
     }
     | TOK_ROUND TOK_LPAREN expression TOK_RPAREN {
         $$.type = infer_math_function_type(FUNC_ROUND, $3.type);
         $$.symbol = NULL;
         $$.is_literal = 0;
+        char* t = newTemp();
+        char* arg_addr = expr_to_addr($3);
+        createQuad(quadList, QUAD_ROUND, arg_addr, NULL, t);
+        $$.addr = t;
+        free(arg_addr);
     }
     | TOK_RE TOK_LPAREN expression TOK_RPAREN {
         $$.type = infer_math_function_type(FUNC_RE, $3.type);
         $$.symbol = NULL;
         $$.is_literal = 0;
+        char* t = newTemp();
+        char* arg_addr = expr_to_addr($3);
+        createQuad(quadList, QUAD_RE, arg_addr, NULL, t);
+        $$.addr = t;
+        free(arg_addr);
     }
     | TOK_IM TOK_LPAREN expression TOK_RPAREN {
         $$.type = infer_math_function_type(FUNC_IM, $3.type);
         $$.symbol = NULL;
         $$.is_literal = 0;
+        char* t = newTemp();
+        char* arg_addr = expr_to_addr($3);
+        createQuad(quadList, QUAD_IM, arg_addr, NULL, t);
+        $$.addr = t;
+        free(arg_addr);
     }
     | TOK_ARG TOK_LPAREN expression TOK_RPAREN {
         $$.type = infer_math_function_type(FUNC_ARG, $3.type);
         $$.symbol = NULL;
         $$.is_literal = 0;
         check_math_function_constraints(FUNC_ARG, $3.type, line_num, col_num);
+        char* t = newTemp();
+        char* arg_addr = expr_to_addr($3);
+        createQuad(quadList, QUAD_ARG, arg_addr, NULL, t);
+        $$.addr = t;
+        free(arg_addr);
     }
     | TOK_MAJUSCULES TOK_LPAREN expression TOK_RPAREN {
         if ($3.type != TYPE_SIGMA) {
@@ -912,6 +1001,11 @@ primaire
         }
         $$.symbol = NULL;
         $$.is_literal = 0;
+        char* t = newTemp();
+        char* arg_addr = expr_to_addr($3);
+        createQuad(quadList, QUAD_MAJUSCULES, arg_addr, NULL, t);
+        $$.addr = t;
+        free(arg_addr);
     }
     | TOK_MINUSCULES TOK_LPAREN expression TOK_RPAREN {
         if ($3.type != TYPE_SIGMA) {
@@ -922,6 +1016,11 @@ primaire
         }
         $$.symbol = NULL;
         $$.is_literal = 0;
+        char* t = newTemp();
+        char* arg_addr = expr_to_addr($3);
+        createQuad(quadList, QUAD_MINUSCULES, arg_addr, NULL, t);
+        $$.addr = t;
+        free(arg_addr);
     }
     ;
 

@@ -46,9 +46,9 @@ void freeQuadList(QuadList* list) {
     if (!list) return;
     
     for (int i = 0; i < list->count; i++) {
-        free(list->quads[i].arg1);
-        free(list->quads[i].arg2);
-        free(list->quads[i].result);
+        if (list->quads[i].arg1) free(list->quads[i].arg1);
+        if (list->quads[i].arg2) free(list->quads[i].arg2);
+        if (list->quads[i].result) free(list->quads[i].result);
     }
     free(list->quads);
     free(list);
@@ -146,6 +146,8 @@ const char* quadOpToString(QuadOp op) {
         case QUAD_RETURN: return "RETURN";
         
         case QUAD_NOP: return "NOP";
+        case QUAD_MAJUSCULES: return "MAJUSCULES";
+        case QUAD_MINUSCULES: return "MINUSCULES";
         
         default: return "UNKNOWN";
     }
@@ -178,12 +180,9 @@ void printQuadruplets(const QuadList* list) {
         return;
     }
     
-    printf("\n╔══════════════════════════════════════════════════════════════╗\n");
-    printf("║           CODE INTERMÉDIAIRE - QUADRUPLETS                   ║\n");
-    printf("╠══════════════════════════════════════════════════════════════╣\n");
-    printf("║ Total: %d quadruplets                                        ║\n", list->count);
-    printf("╚══════════════════════════════════════════════════════════════╝\n\n");
-    
+    printf("\n══════════════════════════════════════════════════════════════\n");
+    printf("          CODE INTERMÉDIAIRE - %d QUADRUPLETS                   \n", list->count);
+    printf("══════════════════════════════════════════════════════════════\n");    
     printf(" Idx  Operation    Arg1         Arg2         Result\n");
     printf("────────────────────────────────────────────────────────────────\n");
     

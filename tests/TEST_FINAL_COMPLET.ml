@@ -41,7 +41,7 @@ FIN
 REPETER
     AFFICHER("Entrez un nombre positif")
     LIRE(n)
-JUSQU'A n > 0
+JUSQUA n > 0
 
 # === CONTRÔLE DE FLUX ===
 

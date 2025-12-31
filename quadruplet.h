@@ -54,6 +54,8 @@ typedef enum {
     QUAD_RE,       // partie réelle
     QUAD_IM,       // partie imaginaire
     QUAD_ARG,      // argument
+    QUAD_MAJUSCULES, // majuscules(string)
+    QUAD_MINUSCULES, // minuscules(string)
     
     // I/O
     QUAD_READ,     // LIRE
