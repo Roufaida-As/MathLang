@@ -218,7 +218,7 @@ DataType infer_binary_operation_type(DataType l, DataType r, SemanticOperator op
     if (l == TYPE_ERROR || r == TYPE_ERROR) return TYPE_ERROR;
 
     switch (op) {
-        case OP_ADD: case OP_SUB: case OP_MUL: case OP_DIV: case OP_POW:
+        case OP_ADD: case OP_SUB: case OP_MUL: case OP_DIV: case OP_POW:case OP_MOD:
             if (!is_numeric_type(l) || !is_numeric_type(r)) return TYPE_ERROR;
             if (l == TYPE_C || r == TYPE_C) return TYPE_C;
             if (l == TYPE_R || r == TYPE_R) return TYPE_R;
@@ -360,6 +360,24 @@ void check_division_by_zero(int is_literal_divisor, int divisor_value,
         semantic_error("Division par zéro - impossible à la compilation", 
                       line, col);
     }
+}
+
+/* ========================================================= */
+/* Vérifier les types comparables                             */
+/* ========================================================= */
+
+bool check_comparable_types(DataType left, DataType right) {
+    /* Types égaux sont comparables */
+    if (left == right) return true;
+    
+    /* Types numériques entre eux */
+    if (is_numeric_type(left) && is_numeric_type(right)) return true;
+    
+    /* Chaînes et caractères */
+    if ((left == TYPE_SIGMA || left == TYPE_CHAR) && 
+        (right == TYPE_SIGMA || right == TYPE_CHAR)) return true;
+    
+    return false;
 }
 
 /* ========================================================= */

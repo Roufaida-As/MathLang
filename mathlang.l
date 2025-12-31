@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "symbol_table.h"
+#include "expr_info.h"
 #include "mathlang.tab.h"
 
 int line_num = 1;
