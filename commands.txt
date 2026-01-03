@@ -8,6 +8,8 @@ voici les commandes pour tester l'analyse lexical manuelle :
 
 
 voici les commandes pour tester l'analyse syntaxique manuelle : 
+cd Analyse_syntaxique_man
+
 # 1. Générer le lexer avec Flex
 flex mathlang.l
 
@@ -15,10 +17,10 @@ flex mathlang.l
 gcc lex.yy.c Analyse_syntaxique_manuelle.c -o Analyse_syntaxique_manuelle -lfl
 
 # 3. Tester
-./Analyse_syntaxique_manuelle tests/test1.ml
-./Analyse_syntaxique_manuelle tests/test2.ml
-./Analyse_syntaxique_manuelle tests/test3.ml
-./Analyse_syntaxique_manuelle tests/test4.ml
+./Analyse_syntaxique_manuelle test1.ml
+./Analyse_syntaxique_manuelle test2.ml
+./Analyse_syntaxique_manuelle test3.ml
+./Analyse_syntaxique_manuelle test4.ml
 
 
 
