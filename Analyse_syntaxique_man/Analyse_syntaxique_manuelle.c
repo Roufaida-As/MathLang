@@ -59,6 +59,9 @@ int nb_rules = 0;
 int FIRST[MAX_SYMBOLS][MAX_TERMINALS];
 int FOLLOW[MAX_NON_TERMINALS][MAX_TERMINALS];
 
+/* Indicateur epsilon pour chaque symbole */
+bool has_epsilon[MAX_SYMBOLS];
+
 /* Table LL(1) : table[non_terminal_index][terminal_index] = numéro de règle */
 int table[MAX_NON_TERMINALS][MAX_TERMINALS]; 
 
@@ -139,37 +142,75 @@ void print_symbols() {
 
 /* Initialise FIRST et FOLLOW */
 void init_first_follow() {
-    for (int i = 0; i < nb_symbols; i++)
+    for (int i = 0; i < nb_symbols; i++) {
+        has_epsilon[i] = false;
         for (int j = 0; j < nb_terminals; j++)
             FIRST[i][j] = 0;
+    }
     for (int i = 0; i < nb_non_terminals; i++)
         for (int j = 0; j < nb_terminals; j++)
             FOLLOW[i][j] = 0;
 }
 
+/* Vérifier si un non-terminal peut dériver epsilon */
+bool can_derive_epsilon(int nt_symbol) {
+    return has_epsilon[nt_symbol];
+}
+
 /* Calcul des ensembles FIRST (itératif) */
 void compute_FIRST() {
+    // Initialiser FIRST pour les terminaux : FIRST(a) = {a}
+    for (int t = 0; t < nb_terminals; t++) {
+        int term_sym = terminals[t];
+        FIRST[term_sym][t] = 1;
+        has_epsilon[term_sym] = false;
+    }
+    
+    // Marquer les règles epsilon directes
+    for (int r = 0; r < nb_rules; r++) {
+        if (rules[r].rhs_len == 0) {
+            has_epsilon[rules[r].lhs] = true;
+        }
+    }
+    
+    // Calculer FIRST pour les non-terminaux
     bool changed;
     do {
         changed = false;
         for (int r = 0; r < nb_rules; r++) {
             int lhs = rules[r].lhs;
-            for (int t = 0; t < nb_terminals; t++) {
-                int term = terminals[t];
-                if (FIRST[lhs][t]) continue;
-
-                int first_rhs = rules[r].rhs[0];
-                if (symbols[first_rhs].is_terminal) {
-                    if (first_rhs == term) {
-                        FIRST[lhs][t] = 1;
-                        changed = true;
-                    }
-                } else {
-                    if (FIRST[first_rhs][t]) {
+            
+            // Si la règle est vide (epsilon), déjà traité
+            if (rules[r].rhs_len == 0) {
+                continue;
+            }
+            
+            // Vérifier si tous les symboles peuvent dériver epsilon
+            bool all_epsilon = true;
+            
+            // Pour chaque symbole de la partie droite
+            for (int i = 0; i < rules[r].rhs_len; i++) {
+                int sym = rules[r].rhs[i];
+                
+                // Ajouter FIRST(sym) à FIRST(lhs)
+                for (int t = 0; t < nb_terminals; t++) {
+                    if (!FIRST[lhs][t] && FIRST[sym][t]) {
                         FIRST[lhs][t] = 1;
                         changed = true;
                     }
                 }
+                
+                // Si sym ne peut pas dériver epsilon, on s'arrête
+                if (!has_epsilon[sym]) {
+                    all_epsilon = false;
+                    break;
+                }
+            }
+            
+            // Si tous les symboles peuvent dériver epsilon, lhs peut aussi
+            if (all_epsilon && !has_epsilon[lhs]) {
+                has_epsilon[lhs] = true;
+                changed = true;
             }
         }
     } while(changed);
@@ -278,27 +319,39 @@ void generate_LL1_table() {
         if (lhs_nt_idx == -1) continue;
         
         if (rules[r].rhs_len == 0) {
+            // Règle epsilon : ajouter dans FOLLOW(lhs)
             for (int t = 0; t < nb_terminals; t++) {
                 if (FOLLOW[lhs_nt_idx][t]) {
                     table[lhs_nt_idx][t] = r;
                 }
             }
         } else {
-            int first_rhs = rules[r].rhs[0];
-            if (symbols[first_rhs].is_terminal) {
-                int t_idx = -1;
+            // Pour chaque terminal dans FIRST de la partie droite
+            bool all_can_be_epsilon = true;
+            
+            for (int i = 0; i < rules[r].rhs_len; i++) {
+                int sym = rules[r].rhs[i];
+                
+                // Ajouter FIRST(sym) à la table
                 for (int t = 0; t < nb_terminals; t++) {
-                    if (terminals[t] == first_rhs) {
-                        t_idx = t;
-                        break;
+                    if (FIRST[sym][t]) {
+                        if (table[lhs_nt_idx][t] == -1) {
+                            table[lhs_nt_idx][t] = r;
+                        }
                     }
                 }
-                if (t_idx != -1) {
-                    table[lhs_nt_idx][t_idx] = r;
+                
+                // Si sym ne peut pas dériver epsilon, on s'arrête
+                if (symbols[sym].is_terminal || !can_derive_epsilon(sym)) {
+                    all_can_be_epsilon = false;
+                    break;
                 }
-            } else {
+            }
+            
+            // Si tous les symboles peuvent dériver epsilon, ajouter FOLLOW(lhs)
+            if (all_can_be_epsilon) {
                 for (int t = 0; t < nb_terminals; t++) {
-                    if (FIRST[first_rhs][t]) {
+                    if (FOLLOW[lhs_nt_idx][t]) {
                         if (table[lhs_nt_idx][t] == -1) {
                             table[lhs_nt_idx][t] = r;
                         }
@@ -306,6 +359,58 @@ void generate_LL1_table() {
                 }
             }
         }
+    }
+}
+
+/* Afficher les ensembles FIRST */
+void print_FIRST() {
+    printf("\n\n");
+    printf("========================================\n");
+    printf("      ENSEMBLES FIRST (DÉBUTS)         \n");
+    printf("========================================\n\n");
+    
+    for (int i = 0; i < nb_non_terminals; i++) {
+        int nt = non_terminals[i];
+        printf("FIRST(%-10s) = { ", symbols[nt].name);
+        
+        bool first_printed = false;
+        
+        // Afficher epsilon si le non-terminal peut dériver epsilon
+        if (can_derive_epsilon(nt)) {
+            printf("ε");
+            first_printed = true;
+        }
+        
+        for (int t = 0; t < nb_terminals; t++) {
+            if (FIRST[nt][t]) {
+                if (first_printed) printf(", ");
+                printf("%s", symbols[terminals[t]].name);
+                first_printed = true;
+            }
+        }
+        printf(" }\n");
+    }
+}
+
+/* Afficher les ensembles FOLLOW */
+void print_FOLLOW() {
+    printf("\n\n");
+    printf("========================================\n");
+    printf("     ENSEMBLES FOLLOW (SUIVANTS)       \n");
+    printf("========================================\n\n");
+    
+    for (int i = 0; i < nb_non_terminals; i++) {
+        printf("FOLLOW(%-10s) = { ", symbols[non_terminals[i]].name);
+        
+        bool first_printed = false;
+        for (int t = 0; t < nb_terminals; t++) {
+            if (FOLLOW[i][t]) {
+                if (first_printed) printf(", ");
+                printf("%s", symbols[terminals[t]].name);
+                first_printed = true;
+            }
+        }
+        printf(" }\n");
     }
 }
 
@@ -361,9 +466,7 @@ void print_LL1_table() {
 void define_grammar() {
     int EOF_SYM = add_symbol("#", true);
     symbols[EOF_SYM].token_code = 0; // EOF
-    
-    printf("\n=== DÉBOGAGE: Codes de tokens ===\n");
-    
+        
     int P = add_symbol("Programme", false);
     int Decls = add_symbol("Declarations", false);
     int Decl = add_symbol("Declaration", false);
@@ -620,6 +723,8 @@ int main(int argc, char** argv) {
     init_first_follow();
     compute_FIRST();
     compute_FOLLOW(0);
+    print_FIRST();
+    print_FOLLOW();
     generate_LL1_table();
     print_LL1_table();
     
