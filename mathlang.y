@@ -20,32 +20,62 @@ QuadList* quadList = NULL;
 
 
 char* expr_to_addr(ExprInfo e) {
+    // Si c'est une comparaison qui n'a pas encore généré son temporaire
+    if (e.cmp_op != CMP_NONE && e.cmp_left && e.cmp_right) {
+        // Générer le quadruplet de comparaison maintenant
+        char* t = newTemp();
+        QuadOp op;
+        switch (e.cmp_op) {
+            case CMP_EQ:  op = QUAD_EQ; break;
+            case CMP_NEQ: op = QUAD_NEQ; break;
+            case CMP_LT:  op = QUAD_LT; break;
+            case CMP_GT:  op = QUAD_GT; break;
+            case CMP_LEQ: op = QUAD_LEQ; break;
+            case CMP_GEQ: op = QUAD_GEQ; break;
+            default: op = QUAD_EQ; break;
+        }
+        createQuad(quadList, op, e.cmp_left, e.cmp_right, t);
+        return t;
+    }
+    
     if (!e.addr) {
         fprintf(stderr, "Erreur: expr_to_addr appelé avec e.addr == NULL\n");
-        return NULL;
+        return strdup("0");  // Retourner une valeur par défaut au lieu de NULL
     }
-    if (e.addr) {
-        // Always return a heap-allocated copy
-        char* copy = malloc(strlen(e.addr) + 1);
-        if (copy) strcpy(copy, e.addr);
-        return copy;
-    }
-    char* temp = malloc(32);
-    if (!temp) return NULL;
-    if (e.is_literal) {
-        if (e.type == TYPE_Z) {
-            sprintf(temp, "%d", e.literal_int);
-        } else if (e.type == TYPE_R) {
-            sprintf(temp, "%g", e.literal_float);
-        } else if (e.type == TYPE_B) {
-            sprintf(temp, "%d", e.literal_int);
-        } else {
-            strcpy(temp, "0");
+    
+    // Always return a heap-allocated copy
+    char* copy = malloc(strlen(e.addr) + 1);
+    if (copy) strcpy(copy, e.addr);
+    return copy;
+}
+
+/* Génère un branchement conditionnel optimisé 
+ * Pour IF: on saute si la condition est FAUSSE (inverse de la comparaison)
+ * Retourne l'indice du quadruplet généré
+ */
+int generate_inverse_branch(QuadList* list, ExprInfo cond) {
+    if (cond.cmp_op != CMP_NONE && cond.cmp_left && cond.cmp_right) {
+        // C'est une comparaison : générer le branchement inverse direct
+        QuadOp branch_op;
+        switch (cond.cmp_op) {
+            case CMP_EQ:  branch_op = QUAD_BNE; break;  // si !=, sauter
+            case CMP_NEQ: branch_op = QUAD_BE; break;   // si ==, sauter  
+            case CMP_LT:  branch_op = QUAD_BGE; break;  // si >=, sauter
+            case CMP_GT:  branch_op = QUAD_BLE; break;  // si <=, sauter
+            case CMP_LEQ: branch_op = QUAD_BG; break;   // si >, sauter
+            case CMP_GEQ: branch_op = QUAD_BL; break;   // si <, sauter
+            default: branch_op = QUAD_BZ; break;
         }
+        createQuad(list, branch_op, cond.cmp_left, cond.cmp_right, "");
+        return nextQuad(list) - 1;
     } else {
-        strcpy(temp, "temp");
+        // Pas une comparaison simple : utiliser BZ classique
+        char* addr = expr_to_addr(cond);
+        // Standard layout: condition in arg1, arg2 unused
+        createQuad(list, QUAD_BZ, addr, NULL, "");
+        free(addr);
+        return nextQuad(list) - 1;
     }
-    return temp;
 }
 
 typedef struct YYLTYPE {
@@ -324,10 +354,49 @@ instruction
     | instruction_pour
     | instruction_repeter
     | instruction_io
-    | TOK_RETOURNER expression
-    | TOK_SORTIR
-    | TOK_CONTINUER
-    ;
+    | TOK_RETOURNER expression {
+        // Générer quadruplet de retour
+        char* ret_addr = expr_to_addr($2);
+        createQuad(quadList, QUAD_RETURN, ret_addr, NULL, NULL);
+        free(ret_addr);
+    }
+    | TOK_SORTIR {
+        // BREAK : sortir de la boucle courante
+        // Générer un BR avec destination inconnue
+        createQuad(quadList, QUAD_BR, NULL, NULL, "");
+        // Empiler dans la pile dédiée au break, pas dans forExitStack !
+        if (!isIntStackEmpty(&whileExitStack)) {
+            // Dans une boucle WHILE
+            pushInt(&whileExitStack, nextQuad(quadList) - 1);
+        } else if (!isIntStackEmpty(&forStartStack)) {
+            // Dans une boucle FOR : empiler dans forBreakStack
+            pushInt(&forBreakStack, nextQuad(quadList) - 1);
+        } else if (!isIntStackEmpty(&repeatStartStack)) {
+            // Dans une boucle REPEAT
+            pushInt(&repeatStartStack, nextQuad(quadList) - 1);
+        }
+    }
+    | TOK_CONTINUER {
+        // CONTINUE : revenir au début de la boucle
+        // Générer un BR vers le début de la boucle
+        if (!isIntStackEmpty(&whileStartStack)) {
+            // Dans une boucle WHILE
+            int start_index = peekInt(&whileStartStack);
+            char start_addr[16];
+            sprintf(start_addr, "%d", start_index);
+            createQuad(quadList, QUAD_BR, NULL, NULL, start_addr);
+        } else if (!isIntStackEmpty(&forStartStack)) {
+            // Dans une boucle FOR : empiler dans forContinueStack
+            createQuad(quadList, QUAD_BR, NULL, NULL, "");
+            pushInt(&forContinueStack, nextQuad(quadList) - 1);
+        } else if (!isIntStackEmpty(&repeatStartStack)) {
+            // Dans une boucle REPEAT
+            int start_index = peekInt(&repeatStartStack);
+            char start_addr[16];
+            sprintf(start_addr, "%d", start_index);
+            createQuad(quadList, QUAD_BR, NULL, NULL, start_addr);
+        }
+    }
 
 /* ===================== */
 /* AFFECTATION           */
@@ -366,23 +435,114 @@ affectation
 /* STRUCTURES            */
 /* ===================== */
 instruction_si
-    : TOK_SI expression TOK_ALORS bloc TOK_FIN {
+    : TOK_SI expression {
+        // Vérification de type
         if ($2.type != TYPE_B) {
             semantic_error("La condition doit être de type B (booléen)", @2.first_line, @2.first_column);
         }
+        // Générer branchement conditionnel inversé (saute si faux)
+        int branch_index = generate_inverse_branch(quadList, $2);
+        // Libérer les adresses de comparaison si nécessaire
+        if ($2.cmp_left) free($2.cmp_left);
+        if ($2.cmp_right) free($2.cmp_right);
+        // Empiler l'indice pour le compléter plus tard
+        pushInt(&ifStack, branch_index);
+    } TOK_ALORS bloc partie_sinon_opt TOK_FIN
+    ;
+
+partie_sinon_opt
+    : /* vide */ {
+        // Pas de ELSE : compléter le BZ pour pointer ici (après le bloc THEN)
+        int bz_index = popInt(&ifStack);
+        char next_addr[16];
+        sprintf(next_addr, "%d", nextQuad(quadList));
+        updateQuad(quadList, bz_index, next_addr);
     }
-    | TOK_SI expression TOK_ALORS bloc TOK_SINON bloc TOK_FIN {
-        if ($2.type != TYPE_B) {
-            semantic_error("La condition doit être de type B (booléen)", @2.first_line, @2.first_column);
+    | TOK_SINON TOK_SI {
+        // SINON SI : chaînage d'alternatives (else-if)
+        // Générer BR pour sauter la fin depuis le THEN précédent
+        createQuad(quadList, QUAD_BR, NULL, NULL, "");
+        int br_index = nextQuad(quadList) - 1;
+        pushInt(&ifBrStack, br_index);
+        
+        // Compléter le BZ précédent : il pointe vers ce nouveau SI
+        int bz_index = popInt(&ifStack);
+        char else_addr[16];
+        sprintf(else_addr, "%d", nextQuad(quadList));
+        updateQuad(quadList, bz_index, else_addr);
+    } expression {
+        // Vérification de type pour la nouvelle condition
+        if ($4.type != TYPE_B) {
+            semantic_error("La condition doit être de type B (booléen)", @4.first_line, @4.first_column);
+        }
+        // Générer branchement conditionnel inversé pour cette condition
+        int branch_index = generate_inverse_branch(quadList, $4);
+        if ($4.cmp_left) free($4.cmp_left);
+        if ($4.cmp_right) free($4.cmp_right);
+        // Empiler ce nouveau BZ
+        pushInt(&ifStack, branch_index);
+    } TOK_ALORS bloc partie_sinon_opt {
+        // Compléter tous les BR de la chaîne else-if
+        // partie_sinon_opt recursive a déjà complété son propre BZ
+        // On doit maintenant compléter notre BR (celui qu'on a généré au début)
+        if (!isIntStackEmpty(&ifBrStack)) {
+            int br_index = popInt(&ifBrStack);
+            char end_addr[16];
+            sprintf(end_addr, "%d", nextQuad(quadList));
+            updateQuad(quadList, br_index, end_addr);
+        }
+    }
+    | TOK_SINON {
+        // SINON simple (dernier cas, pas de condition)
+        createQuad(quadList, QUAD_BR, NULL, NULL, "");
+        int br_index = nextQuad(quadList) - 1;
+        
+        // Compléter le BZ du IF : il pointe vers le début du ELSE
+        int bz_index = popInt(&ifStack);
+        char else_addr[16];
+        sprintf(else_addr, "%d", nextQuad(quadList));
+        updateQuad(quadList, bz_index, else_addr);
+        
+        pushInt(&ifBrStack, br_index);
+    } bloc {
+        // Compléter le BR : il pointe vers ici (après le bloc ELSE)
+        if (!isIntStackEmpty(&ifBrStack)) {
+            int br_index = popInt(&ifBrStack);
+            char end_addr[16];
+            sprintf(end_addr, "%d", nextQuad(quadList));
+            updateQuad(quadList, br_index, end_addr);
         }
     }
     ;
 
 instruction_tant_que
-    : TOK_TANT TOK_QUE expression TOK_FAIRE bloc TOK_FIN {
-        if ($3.type != TYPE_B) {
-            semantic_error("La condition doit être de type B (booléen)", @3.first_line, @3.first_column);
+    : TOK_TANT TOK_QUE {
+        // Mémoriser l'indice de début de boucle (pour y revenir)
+        pushInt(&whileStartStack, nextQuad(quadList));
+    } expression {
+        // Vérification de type
+        if ($4.type != TYPE_B) {
+            semantic_error("La condition doit être de type B (booléen)", @4.first_line, @4.first_column);
         }
+        // Générer branchement conditionnel inversé (saute si faux)
+        int branch_index = generate_inverse_branch(quadList, $4);
+        // Libérer les adresses de comparaison si nécessaire
+        if ($4.cmp_left) free($4.cmp_left);
+        if ($4.cmp_right) free($4.cmp_right);
+        // Empiler l'indice pour le compléter plus tard
+        pushInt(&whileExitStack, branch_index);
+    } TOK_FAIRE bloc TOK_FIN {
+        // Fin du corps de la boucle : générer BR pour revenir au début
+        int start_index = popInt(&whileStartStack);
+        char start_addr[16];
+        sprintf(start_addr, "%d", start_index);
+        createQuad(quadList, QUAD_BR, NULL, NULL, start_addr);
+        
+        // Compléter le BZ de sortie : il pointe vers ici (après la boucle)
+        int bz_index = popInt(&whileExitStack);
+        char exit_addr[16];
+        sprintf(exit_addr, "%d", nextQuad(quadList));
+        updateQuad(quadList, bz_index, exit_addr);
     }
     ;
 
@@ -395,7 +555,56 @@ instruction_pour
             SymbolEntry* it = find_symbol(global_symbol_table, $2);
             if (it) mark_symbol_initialized(it);
         }
+        
+        // Initialiser la variable de boucle
+        char* start_addr = expr_to_addr($4);
+        createQuad(quadList, QUAD_ASSIGN, start_addr, NULL, $2);
+        free(start_addr);
+        
+        // Mémoriser le début de la boucle (test de condition)
+        pushInt(&forStartStack, nextQuad(quadList));
+        
+        // Générer le branchement : BG i, fin, sortie (si i > fin, sortir)
+        char* end_addr = expr_to_addr($6);
+        createQuad(quadList, QUAD_BG, $2, end_addr, "");
+        free(end_addr);
+        pushInt(&forExitStack, nextQuad(quadList) - 1);
     } bloc {
+        // Incrémentation : variable = variable + 1
+        char* temp_incr = newTemp();
+        createQuad(quadList, QUAD_ADD, $2, "1", temp_incr);
+        createQuad(quadList, QUAD_ASSIGN, temp_incr, NULL, $2);
+        free(temp_incr);
+        
+        // Compléter les BR de SORTIR (ils pointent vers la fin de la boucle)
+        while (!isIntStackEmpty(&forBreakStack)) {
+            int br_index = popInt(&forBreakStack);
+            char exit_addr[16];
+            sprintf(exit_addr, "%d", nextQuad(quadList));
+            updateQuad(quadList, br_index, exit_addr);
+        }
+        
+        // Compléter les BR de CONTINUER (ils pointent vers le retour au début)
+        int continue_target = nextQuad(quadList);
+        while (!isIntStackEmpty(&forContinueStack)) {
+            int br_index = popInt(&forContinueStack);
+            char target_addr[16];
+            sprintf(target_addr, "%d", continue_target);
+            updateQuad(quadList, br_index, target_addr);
+        }
+        
+        // Retour au début de la boucle (test)
+        int start_index = popInt(&forStartStack);
+        char start_addr[16];
+        sprintf(start_addr, "%d", start_index);
+        createQuad(quadList, QUAD_BR, NULL, NULL, start_addr);
+        
+        // Compléter le BZ de sortie : il pointe vers APRÈS cette boucle
+        int bz_index = popInt(&forExitStack);
+        char exit_addr[16];
+        sprintf(exit_addr, "%d", nextQuad(quadList));
+        updateQuad(quadList, bz_index, exit_addr);
+        
         if (global_symbol_table) exit_scope(global_symbol_table);
         free($2);
     } TOK_FIN
@@ -407,7 +616,58 @@ instruction_pour
             SymbolEntry* it = find_symbol(global_symbol_table, $2);
             if (it) mark_symbol_initialized(it);
         }
+        
+        // Initialiser la variable de boucle
+        char* start_addr = expr_to_addr($4);
+        createQuad(quadList, QUAD_ASSIGN, start_addr, NULL, $2);
+        free(start_addr);
+        
+        // Mémoriser le début de la boucle (test de condition)
+        pushInt(&forStartStack, nextQuad(quadList));
+        
+        // Générer le branchement : BG i, fin, sortie (si i > fin, sortir)
+        char* end_addr = expr_to_addr($6);
+        createQuad(quadList, QUAD_BG, $2, end_addr, "");
+        free(end_addr);
+        pushInt(&forExitStack, nextQuad(quadList) - 1);
     } bloc {
+        // Incrémentation : variable = variable + pas
+        char* step_addr = expr_to_addr($8);
+        char* temp_incr = newTemp();
+        createQuad(quadList, QUAD_ADD, $2, step_addr, temp_incr);
+        createQuad(quadList, QUAD_ASSIGN, temp_incr, NULL, $2);
+        free(step_addr);
+        free(temp_incr);
+        
+        // Compléter les BR de SORTIR (ils pointent vers la fin de la boucle)
+        while (!isIntStackEmpty(&forBreakStack)) {
+            int br_index = popInt(&forBreakStack);
+            char exit_addr[16];
+            sprintf(exit_addr, "%d", nextQuad(quadList));
+            updateQuad(quadList, br_index, exit_addr);
+        }
+        
+        // Compléter les BR de CONTINUER (ils pointent vers le retour au début)
+        int continue_target = nextQuad(quadList);
+        while (!isIntStackEmpty(&forContinueStack)) {
+            int br_index = popInt(&forContinueStack);
+            char target_addr[16];
+            sprintf(target_addr, "%d", continue_target);
+            updateQuad(quadList, br_index, target_addr);
+        }
+        
+        // Retour au début de la boucle (test)
+        int start_index = popInt(&forStartStack);
+        char start_addr[16];
+        sprintf(start_addr, "%d", start_index);
+        createQuad(quadList, QUAD_BR, NULL, NULL, start_addr);
+        
+        // Compléter le BZ de sortie
+        int bz_index = popInt(&forExitStack);
+        char exit_addr[16];
+        sprintf(exit_addr, "%d", nextQuad(quadList));
+        updateQuad(quadList, bz_index, exit_addr);
+        
         if (global_symbol_table) exit_scope(global_symbol_table);
         free($2);
     } TOK_FIN
@@ -419,6 +679,8 @@ instruction_pour
             SymbolEntry* it = find_symbol(global_symbol_table, $2);
             if (it) mark_symbol_initialized(it);
         }
+        // Version simplifiée pour FOR...IN (parcours d'ensemble)
+        // Cette version nécessiterait des quadruplets spécifiques pour l'itération
     } bloc {
         if (global_symbol_table) exit_scope(global_symbol_table);
         free($2);
@@ -426,21 +688,65 @@ instruction_pour
     ;
 
 instruction_repeter
-    : TOK_REPETER bloc TOK_JUSQUA expression
+    : TOK_REPETER {
+        // Mémoriser l'indice de début de boucle
+        pushInt(&repeatStartStack, nextQuad(quadList));
+    } bloc TOK_JUSQUA expression {
+        // Vérification de type de la condition
+        if ($5.type != TYPE_B) {
+            semantic_error("La condition doit être de type B (booléen)", @5.first_line, @5.first_column);
+        }
+        
+        int start_index = popInt(&repeatStartStack);
+        char start_addr[16];
+        sprintf(start_addr, "%d", start_index);
+        
+        // REPEAT...UNTIL continue tant que la condition est FAUSSE
+        // Donc on génère un branchement inversé qui saute au début si faux
+        if ($5.cmp_op != CMP_NONE && $5.cmp_left && $5.cmp_right) {
+            // C'est une comparaison : générer le branchement inverse direct
+            QuadOp branch_op;
+            switch ($5.cmp_op) {
+                case CMP_EQ:  branch_op = QUAD_BNE; break;  // si !=, reboucler
+                case CMP_NEQ: branch_op = QUAD_BE; break;   // si ==, reboucler
+                case CMP_LT:  branch_op = QUAD_BGE; break;  // si >=, reboucler
+                case CMP_GT:  branch_op = QUAD_BLE; break;  // si <=, reboucler
+                case CMP_LEQ: branch_op = QUAD_BG; break;   // si >, reboucler
+                case CMP_GEQ: branch_op = QUAD_BL; break;   // si <, reboucler
+                default: branch_op = QUAD_BZ; break;
+            }
+            createQuad(quadList, branch_op, $5.cmp_left, $5.cmp_right, start_addr);
+            free($5.cmp_left);
+            free($5.cmp_right);
+        } else {
+            // Pas une comparaison simple : utiliser BZ classique
+            char* cond_addr = expr_to_addr($5);
+            // Standard layout: condition in arg1, arg2 unused
+            createQuad(quadList, QUAD_BZ, cond_addr, NULL, start_addr);
+            free(cond_addr);
+        }
+    }
     ;
 
 /* ===================== */
 /* I/O                   */
 /* ===================== */
 instruction_io
-    : TOK_AFFICHER TOK_LPAREN liste_expressions TOK_RPAREN
-    | TOK_AFFICHER_LIGNE TOK_LPAREN liste_expressions TOK_RPAREN
+    : TOK_AFFICHER TOK_LPAREN liste_expressions TOK_RPAREN {
+        // Les quadruplets sont générés dans liste_expressions
+    }
+    | TOK_AFFICHER_LIGNE TOK_LPAREN liste_expressions TOK_RPAREN {
+        // Générer un quadruplet pour le saut de ligne
+        createQuad(quadList, QUAD_WRITELN, NULL, NULL, NULL);
+    }
     | TOK_LIRE TOK_LPAREN TOK_ID TOK_RPAREN {
         if (global_symbol_table) {
             SymbolEntry* e = find_symbol(global_symbol_table, $3);
             if (!e) {
                 error_undeclared_symbol($3, @3.first_line, @3.first_column);
             } else {
+                // Générer quadruplet READ
+                createQuad(quadList, QUAD_READ, NULL, NULL, $3);
                 mark_symbol_initialized(e);
                 mark_symbol_used(e);
             }
@@ -450,8 +756,22 @@ instruction_io
     ;
 
 liste_expressions
-    : expression
-    | liste_expressions TOK_COMMA expression
+    : expression {
+        // Générer quadruplet WRITE pour cette expression
+        char* addr = expr_to_addr($1);
+        if (addr) {
+            createQuad(quadList, QUAD_WRITE, addr, NULL, NULL);
+            free(addr);
+        }
+    }
+    | liste_expressions TOK_COMMA expression {
+        // Générer quadruplet WRITE pour cette expression
+        char* addr = expr_to_addr($3);
+        if (addr) {
+            createQuad(quadList, QUAD_WRITE, addr, NULL, NULL);
+            free(addr);
+        }
+    }
     ;
 
 /* ===================== */
@@ -495,110 +815,92 @@ expr_cmp
             error_type_mismatch($1.type, $3.type, @2.first_line, @2.first_column);
         }
         
-        // GÉNÉRATION DE QUADRUPLET
-        char* t = newTemp();
-        char* addr1 = expr_to_addr($1);
-        char* addr2 = expr_to_addr($3);
-        createQuad(quadList, QUAD_EQ, addr1, addr2, t);
-        $$.addr = t;
-        free(addr1);
-        free(addr2);
-        
+        // Stocker les informations de comparaison pour optimisation
         $$.type = TYPE_B;
         $$.symbol = NULL;
         $$.is_literal = 0;
+        $$.cmp_op = CMP_EQ;
+        $$.cmp_left = expr_to_addr($1);
+        $$.cmp_right = expr_to_addr($3);
+        $$.addr = NULL;  // Sera généré si nécessaire
     }
     | expr_cmp TOK_NEQ expr_add {
         if (!check_comparable_types($1.type, $3.type)) {
             error_type_mismatch($1.type, $3.type, @2.first_line, @2.first_column);
         }
         
-        // GÉNÉRATION DE QUADRUPLET
-        char* t = newTemp();
-        char* addr1 = expr_to_addr($1);
-        char* addr2 = expr_to_addr($3);
-        createQuad(quadList, QUAD_NEQ, addr1, addr2, t);
-        $$.addr = t;
-        free(addr1);
-        free(addr2);
-        
+        // Stocker les informations de comparaison pour optimisation
         $$.type = TYPE_B;
         $$.symbol = NULL;
         $$.is_literal = 0;
+        $$.cmp_op = CMP_NEQ;
+        $$.cmp_left = expr_to_addr($1);
+        $$.cmp_right = expr_to_addr($3);
+        $$.addr = NULL;
     }
     | expr_cmp TOK_LT expr_add {
         if (!check_comparable_types($1.type, $3.type)) {
             error_type_mismatch($1.type, $3.type, @2.first_line, @2.first_column);
         }
         
-        // GÉNÉRATION DE QUADRUPLET
-        char* t = newTemp();
-        char* addr1 = expr_to_addr($1);
-        char* addr2 = expr_to_addr($3);
-        createQuad(quadList, QUAD_LT, addr1, addr2, t);
-        $$.addr = t;
-        free(addr1);
-        free(addr2);
-        
+        // Stocker les informations de comparaison pour optimisation
         $$.type = TYPE_B;
         $$.symbol = NULL;
         $$.is_literal = 0;
+        $$.cmp_op = CMP_LT;
+        $$.cmp_left = expr_to_addr($1);
+        $$.cmp_right = expr_to_addr($3);
+        $$.addr = NULL;
     }
     | expr_cmp TOK_GT expr_add {
         if (!check_comparable_types($1.type, $3.type)) {
             error_type_mismatch($1.type, $3.type, @2.first_line, @2.first_column);
         }
         
-        // GÉNÉRATION DE QUADRUPLET
-        char* t = newTemp();
-        char* addr1 = expr_to_addr($1);
-        char* addr2 = expr_to_addr($3);
-        createQuad(quadList, QUAD_GT, addr1, addr2, t);
-        $$.addr = t;
-        free(addr1);
-        free(addr2);
-        
+        // Stocker les informations de comparaison pour optimisation
         $$.type = TYPE_B;
         $$.symbol = NULL;
         $$.is_literal = 0;
+        $$.cmp_op = CMP_GT;
+        $$.cmp_left = expr_to_addr($1);
+        $$.cmp_right = expr_to_addr($3);
+        $$.addr = NULL;
     }
     | expr_cmp TOK_LEQ expr_add {
         if (!check_comparable_types($1.type, $3.type)) {
             error_type_mismatch($1.type, $3.type, @2.first_line, @2.first_column);
         }
         
-        // GÉNÉRATION DE QUADRUPLET
-        char* t = newTemp();
-        char* addr1 = expr_to_addr($1);
-        char* addr2 = expr_to_addr($3);
-        createQuad(quadList, QUAD_LEQ, addr1, addr2, t);
-        $$.addr = t;
-        free(addr1);
-        free(addr2);
-        
+        // Stocker les informations de comparaison pour optimisation
         $$.type = TYPE_B;
         $$.symbol = NULL;
         $$.is_literal = 0;
+        $$.cmp_op = CMP_LEQ;
+        $$.cmp_left = expr_to_addr($1);
+        $$.cmp_right = expr_to_addr($3);
+        $$.addr = NULL;
     }
     | expr_cmp TOK_GEQ expr_add {
         if (!check_comparable_types($1.type, $3.type)) {
             error_type_mismatch($1.type, $3.type, @2.first_line, @2.first_column);
         }
         
-        // GÉNÉRATION DE QUADRUPLET
-        char* t = newTemp();
-        char* addr1 = expr_to_addr($1);
-        char* addr2 = expr_to_addr($3);
-        createQuad(quadList, QUAD_GEQ, addr1, addr2, t);
-        $$.addr = t;
-        free(addr1);
-        free(addr2);
-        
+        // Stocker les informations de comparaison pour optimisation
         $$.type = TYPE_B;
         $$.symbol = NULL;
         $$.is_literal = 0;
+        $$.cmp_op = CMP_GEQ;
+        $$.cmp_left = expr_to_addr($1);
+        $$.cmp_right = expr_to_addr($3);
+        $$.addr = NULL;
     }
-    | expr_add { $$ = $1; }
+    | expr_add {
+        $$ = $1;
+        $$.cmp_op = CMP_NONE;  // Pas une comparaison
+        $$.cmp_left = NULL;
+        $$.cmp_right = NULL;
+    }
+    ;
     ;
 
 
@@ -780,6 +1082,9 @@ primaire
         char* addr = malloc(32);
         sprintf(addr, "%d", $1);
         $$.addr = addr;
+        $$.cmp_op = CMP_NONE;
+        $$.cmp_left = NULL;
+        $$.cmp_right = NULL;
     }
     | TOK_FLOAT {
         $$.type = TYPE_R;
@@ -787,9 +1092,14 @@ primaire
         $$.is_literal = 1;
         $$.literal_int = (int)$1;
         $$.literal_float = $1;
+
+         // GÉNÉRATION ADRESSE
         char* addr = malloc(32);
         sprintf(addr, "%g", $1);
         $$.addr = addr;
+        $$.cmp_op = CMP_NONE;
+        $$.cmp_left = NULL;
+        $$.cmp_right = NULL;
     }
     | TOK_STRING {
         $$.type = TYPE_SIGMA;
@@ -798,6 +1108,9 @@ primaire
         $$.literal_int = 0;
         $$.literal_float = 0.0;
         $$.addr = strdup($1);
+        $$.cmp_op = CMP_NONE;
+        $$.cmp_left = NULL;
+        $$.cmp_right = NULL;
     }
     | TOK_CHAR {
         $$.type = TYPE_CHAR;
@@ -808,6 +1121,9 @@ primaire
         char* addr = malloc(4);
         sprintf(addr, "'%c'", $1);
         $$.addr = addr;
+        $$.cmp_op = CMP_NONE;
+        $$.cmp_left = NULL;
+        $$.cmp_right = NULL;
     }
     | TOK_COMPLEX {
         $$.type = TYPE_C;
@@ -816,6 +1132,9 @@ primaire
         $$.literal_int = 0;
         $$.literal_float = 0.0;
         $$.addr = strdup($1);
+        $$.cmp_op = CMP_NONE;
+        $$.cmp_left = NULL;
+        $$.cmp_right = NULL;
     }
     | TOK_TRUE {
         $$.type = TYPE_B;
@@ -826,6 +1145,9 @@ primaire
         char* addr = malloc(8);
         sprintf(addr, "true");
         $$.addr = addr;
+        $$.cmp_op = CMP_NONE;
+        $$.cmp_left = NULL;
+        $$.cmp_right = NULL;
     }
     | TOK_FALSE {
         $$.type = TYPE_B;
@@ -836,6 +1158,9 @@ primaire
         char* addr = malloc(8);
         sprintf(addr, "false");
         $$.addr = addr;
+        $$.cmp_op = CMP_NONE;
+        $$.cmp_left = NULL;
+        $$.cmp_right = NULL;
     }
        | TOK_ID {
         if (global_symbol_table) {
@@ -845,6 +1170,9 @@ primaire
                 $$.type = TYPE_ERROR;
                 $$.symbol = NULL;
                 $$.addr = NULL;
+                $$.cmp_op = CMP_NONE;
+                $$.cmp_left = NULL;
+                $$.cmp_right = NULL;
             } else {
                 if (!entry->is_initialized && entry->category == SYMBOL_VARIABLE) {
                     error_uninitialized_variable($1, @1.first_line, @1.first_column);
@@ -853,11 +1181,17 @@ primaire
                 $$.type = entry->type;
                 $$.symbol = entry;
                 $$.addr = strdup($1);  // ← AJOUTEZ CETTE LIGNE
+                $$.cmp_op = CMP_NONE;
+                $$.cmp_left = NULL;
+                $$.cmp_right = NULL;
             }
         } else {
             $$.type = TYPE_UNKNOWN;
             $$.symbol = NULL;
             $$.addr = NULL;
+            $$.cmp_op = CMP_NONE;
+            $$.cmp_left = NULL;
+            $$.cmp_right = NULL;
         }
         $$.is_literal = 0;
         free($1);

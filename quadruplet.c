@@ -12,12 +12,15 @@ static int labelCounter = 0;
 
 // Piles globales pour les structures de contrôle
 IntStack ifStack;
+IntStack ifBrStack;        // Pile dédiée pour les BR du premier IF (avant SINON)
 IntStack elseStack;
 IntStack whileStartStack;
 IntStack whileExitStack;
 IntStack forStartStack;
 IntStack forExitStack;
 IntStack forIncrStack;
+IntStack forBreakStack;    // Pile dédiée pour les BR générés par SORTIR dans les boucles
+IntStack forContinueStack; // Pile dédiée pour les BR générés par CONTINUER dans les boucles
 IntStack repeatStartStack;
 
 /* ========================================================= */
@@ -122,6 +125,13 @@ const char* quadOpToString(QuadOp op) {
         case QUAD_BZ: return "BZ";
         case QUAD_BNZ: return "BNZ";
         
+        case QUAD_BG: return "BG";
+        case QUAD_BGE: return "BGE";
+        case QUAD_BL: return "BL";
+        case QUAD_BLE: return "BLE";
+        case QUAD_BE: return "BE";
+        case QUAD_BNE: return "BNE";
+        
         case QUAD_SIN: return "SIN";
         case QUAD_COS: return "COS";
         case QUAD_SQRT: return "SQRT";
@@ -183,7 +193,7 @@ void printQuadruplets(const QuadList* list) {
     printf("\n══════════════════════════════════════════════════════════════\n");
     printf("          CODE INTERMÉDIAIRE - %d QUADRUPLETS                   \n", list->count);
     printf("══════════════════════════════════════════════════════════════\n");    
-    printf(" Idx  Operation    Arg1         Arg2         Result\n");
+    printf(" Idx  Operation    Arg1         Arg2         Result or Target\n");
     printf("────────────────────────────────────────────────────────────────\n");
     
     for (int i = 0; i < list->count; i++) {
@@ -317,12 +327,15 @@ void freeStringStack(StringStack* stack) {
 
 void initControlStacks(void) {
     initIntStack(&ifStack);
+    initIntStack(&ifBrStack);
     initIntStack(&elseStack);
     initIntStack(&whileStartStack);
     initIntStack(&whileExitStack);
     initIntStack(&forStartStack);
     initIntStack(&forExitStack);
     initIntStack(&forIncrStack);
+    initIntStack(&forBreakStack);
+    initIntStack(&forContinueStack);
     initIntStack(&repeatStartStack);
 }
 
