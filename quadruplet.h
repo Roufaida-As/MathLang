@@ -41,6 +41,14 @@ typedef enum {
     QUAD_BZ,       // branchement si zéro (faux)
     QUAD_BNZ,      // branchement si non-zéro (vrai)
     
+    // Branchements conditionnels
+    QUAD_BG,       // branchement si >
+    QUAD_BGE,      // branchement si >=
+    QUAD_BL,       // branchement si <
+    QUAD_BLE,      // branchement si <=
+    QUAD_BE,       // branchement si ==
+    QUAD_BNE,      // branchement si !=
+    
     // Fonctions mathématiques
     QUAD_SIN,
     QUAD_COS,
@@ -167,6 +175,7 @@ void freeStringStack(StringStack* stack);
 
 // Piles pour IF/ELSE
 extern IntStack ifStack;        // Pour les BZ à compléter
+extern IntStack ifBrStack;      // Pour les BR du premier IF (avant SINSO)
 extern IntStack elseStack;      // Pour les BR à compléter
 
 // Piles pour WHILE
@@ -177,6 +186,8 @@ extern IntStack whileExitStack;     // BZ de sortie à compléter
 extern IntStack forStartStack;      // Indices de début de boucle
 extern IntStack forExitStack;       // BZ de sortie à compléter
 extern IntStack forIncrStack;       // Indices d'incrémentation
+extern IntStack forBreakStack;      // BR générés par SORTIR
+extern IntStack forContinueStack;   // BR générés par CONTINUER
 
 // Piles pour REPEAT
 extern IntStack repeatStartStack;   // Indices de début de boucle
