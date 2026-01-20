@@ -357,6 +357,7 @@ DataType infer_string_operation_type(DataType left, DataType right,
 void check_division_by_zero(int is_literal_divisor, int divisor_value,
                            int line, int col) {
     if (is_literal_divisor && divisor_value == 0) {
+        //is_literal_divisor means we know at compile time that the divisor is zero
         semantic_error("Division par zéro - impossible à la compilation", 
                       line, col);
     }
