@@ -691,34 +691,20 @@ instruction_repeter
             semantic_error("La condition doit être de type B (booléen)", @5.first_line, @5.first_column);
         }
         
+        // Récupérer l'adresse du début
         int start_index = popInt(&repeatStartStack);
         char start_addr[16];
         sprintf(start_addr, "%d", start_index);
         
         // REPEAT...UNTIL continue tant que la condition est FAUSSE
-        // Donc on génère un branchement inversé qui saute au début si faux
-        if ($5.cmp_op != CMP_NONE && $5.cmp_left && $5.cmp_right) {
-            // C'est une comparaison : générer le branchement inverse direct
-            QuadOp branch_op;
-            switch ($5.cmp_op) {
-                case CMP_EQ:  branch_op = QUAD_BNE; break;  // si !=, reboucler
-                case CMP_NEQ: branch_op = QUAD_BE; break;   // si ==, reboucler
-                case CMP_LT:  branch_op = QUAD_BGE; break;  // si >=, reboucler
-                case CMP_GT:  branch_op = QUAD_BLE; break;  // si <=, reboucler
-                case CMP_LEQ: branch_op = QUAD_BG; break;   // si >, reboucler
-                case CMP_GEQ: branch_op = QUAD_BL; break;   // si <, reboucler
-                default: branch_op = QUAD_BZ; break;
-            }
-            createQuad(quadList, branch_op, $5.cmp_left, $5.cmp_right, start_addr);
-            free($5.cmp_left);
-            free($5.cmp_right);
-        } else {
-            // Pas une comparaison simple : utiliser BZ classique
-            char* cond_addr = expr_to_addr($5);
-            // Standard layout: condition in arg1, arg2 unused
-            createQuad(quadList, QUAD_BZ, cond_addr, NULL, start_addr);
-            free(cond_addr);
-        }
+        // Générer branchement inversé (saute au début si faux)
+        // On met à jour le quadruplet pour pointer vers le début
+        int branch_index = generate_inverse_branch(quadList, $5);
+        if ($5.cmp_left) free($5.cmp_left);
+        if ($5.cmp_right) free($5.cmp_right);
+        
+        // Compléter le branchement pour pointer vers le début de la boucle
+        updateQuad(quadList, branch_index, start_addr);
     }
     ;
 
@@ -769,7 +755,7 @@ liste_expressions
     ;
 
 /* ===================== */
-/* EXPRESSIONS (SANS CONFLITS) */
+/* EXPRESSIONS */
 /* ===================== */
 
 expression

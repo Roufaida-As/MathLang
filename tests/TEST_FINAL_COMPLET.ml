@@ -1,7 +1,4 @@
-# ============================================
-# TEST COMPLET - MATHLANG LEXER
-# Sections A + B + C
-# ============================================
+# TEST COMPLET
 
 # === SECTION A : MOTS-CLÉS ET DÉCLARATIONS ===
 
@@ -54,3 +51,17 @@ POUR i DE 0 A 100 FAIRE
     FIN
     AFFICHER(i)
 FIN
+
+# --- Mathematical functions ---
+SOIT s1 dans R tel que s1 <- sin(x)
+SOIT s2 dans R tel que s2 <- cos(x)
+SOIT s3 dans R tel que s3 <- exp(y)
+SOIT s4 dans R tel que s4 <- log(10)
+SOIT s5 dans R tel que s5 <- sqrt(16)
+SOIT s6 dans R tel que s6 <- abs(-5)
+SOIT s7 dans R tel que s7 <- floor(3.7)
+SOIT s8 dans R tel que s8 <- ceil(3.1)
+SOIT s9 dans R tel que s9 <- round(2.5)
+
+# --- End of test ---
+AFFICHER_LIGNE("All token tests completed")
