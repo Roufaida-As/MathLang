@@ -175,7 +175,7 @@ void freeStringStack(StringStack* stack);
 
 // Piles pour IF/ELSE
 extern IntStack ifStack;        // Pour les BZ à compléter
-extern IntStack ifBrStack;      // Pour les BR du premier IF (avant SINSO)
+extern IntStack ifBrStack;      // Pour les BR du premier IF (avant SINON)
 extern IntStack elseStack;      // Pour les BR à compléter
 
 // Piles pour WHILE

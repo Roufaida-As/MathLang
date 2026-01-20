@@ -224,7 +224,6 @@ declaration_variable
             add_symbol(global_symbol_table, $2, SYMBOL_VARIABLE, $4, 
                       SUBTYPE_DEFAULT, @2.first_line, @2.first_column);
         }
-        // free($2); // Removed to prevent double free
     }
     | TOK_SOIT TOK_ID TOK_IN type TOK_TEL_QUE TOK_ID TOK_ASSIGN expression {
         if (global_symbol_table) {
@@ -243,7 +242,6 @@ declaration_variable
             }
         }
         free($2);
-        // free($6); // Removed to prevent double free
     }
     ;
 
@@ -264,8 +262,6 @@ declaration_constante
                 semantic_error("Le nom de constante ne correspond pas", @2.first_line, @2.first_column);
             }
         }
-        // free($2); // Removed to prevent double free
-        // free($6); // Removed to prevent double free
     }
     ;
 
@@ -364,7 +360,7 @@ instruction
         // BREAK : sortir de la boucle courante
         // Générer un BR avec destination inconnue
         createQuad(quadList, QUAD_BR, NULL, NULL, "");
-        // Empiler dans la pile dédiée au break, pas dans forExitStack !
+        // Empiler dans la pile dédiée au break
         if (!isIntStackEmpty(&whileExitStack)) {
             // Dans une boucle WHILE
             pushInt(&whileExitStack, nextQuad(quadList) - 1);
@@ -571,21 +567,13 @@ instruction_pour
         pushInt(&forExitStack, nextQuad(quadList) - 1);
     } bloc {
         // Incrémentation : variable = variable + 1
+        int continue_target = nextQuad(quadList);  // Calculer AVANT l'incrémentation
         char* temp_incr = newTemp();
         createQuad(quadList, QUAD_ADD, $2, "1", temp_incr);
         createQuad(quadList, QUAD_ASSIGN, temp_incr, NULL, $2);
         free(temp_incr);
         
-        // Compléter les BR de SORTIR (ils pointent vers la fin de la boucle)
-        while (!isIntStackEmpty(&forBreakStack)) {
-            int br_index = popInt(&forBreakStack);
-            char exit_addr[16];
-            sprintf(exit_addr, "%d", nextQuad(quadList));
-            updateQuad(quadList, br_index, exit_addr);
-        }
-        
-        // Compléter les BR de CONTINUER (ils pointent vers le retour au début)
-        int continue_target = nextQuad(quadList);
+        // Compléter les BR de CONTINUER (ils pointent vers l'incrémentation)
         while (!isIntStackEmpty(&forContinueStack)) {
             int br_index = popInt(&forContinueStack);
             char target_addr[16];
@@ -604,6 +592,12 @@ instruction_pour
         char exit_addr[16];
         sprintf(exit_addr, "%d", nextQuad(quadList));
         updateQuad(quadList, bz_index, exit_addr);
+
+        // Compléter les BR de SORTIR (ils pointent vers la fin de la boucle)
+        while (!isIntStackEmpty(&forBreakStack)) {
+            int br_index = popInt(&forBreakStack);
+            updateQuad(quadList, br_index, exit_addr);
+        }
         
         if (global_symbol_table) exit_scope(global_symbol_table);
         free($2);
@@ -1180,7 +1174,7 @@ primaire
                 mark_symbol_used(entry);
                 $$.type = entry->type;
                 $$.symbol = entry;
-                $$.addr = strdup($1);  // ← AJOUTEZ CETTE LIGNE
+                $$.addr = strdup($1);
                 $$.cmp_op = CMP_NONE;
                 $$.cmp_left = NULL;
                 $$.cmp_right = NULL;
@@ -1460,6 +1454,8 @@ const char* token_name(int tok) {
         case TOK_RE: return "TOK_RE";
         case TOK_IM: return "TOK_IM";
         case TOK_ARG: return "TOK_ARG";
+
+        case TOK_FONCTION: return "TOK_FONCTION";
 
         /* Fonctions chaînes */
         case TOK_MAJUSCULES: return "TOK_MAJUSCULES";
