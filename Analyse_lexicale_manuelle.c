@@ -1,581 +1,466 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <ctype.h>
 #include <stdbool.h>
 
-#define MAX_STATES 50
-#define MAX_TRANSITIONS 100
-#define MAX_SYMBOLS 128
+#ifdef _WIN32
+#include <windows.h>
+#define CLEAR_SCREEN "cls"
+#else
+#define CLEAR_SCREEN "clear"
+#endif
+
+// =========================== STRUCTURES ===========================
+
+// Structure pour un état d'automate
+typedef struct State {
+    int id;
+    bool is_final;
+} State;
 
 // Structure pour une transition
-typedef struct {
+typedef struct Transition {
     int from_state;
     int to_state;
-    char symbol;  // '\0' pour epsilon
+    char symbol; // '\0' pour epsilon
 } Transition;
 
 // Structure pour un automate
-typedef struct {
+typedef struct Automaton {
+    State* states;
     int num_states;
-    int initial_state;
-    bool accepting_states[MAX_STATES];
-    Transition transitions[MAX_TRANSITIONS];
+    Transition* transitions;
     int num_transitions;
-    char alphabet[MAX_SYMBOLS];
-    int alphabet_size;
+    int initial_state;
 } Automaton;
 
-// Structure pour un ensemble d'états (pour la construction du AFD)
-typedef struct {
-    int states[MAX_STATES];
-    int size;
-} StateSet;
+// =========================== AUTOMATE IDENTIFICATEUR ===========================
 
-// Fonction pour initialiser un automate
-void init_automaton(Automaton *aut) {
-    aut->num_states = 0;
-    aut->initial_state = 0;
-    aut->num_transitions = 0;
-    aut->alphabet_size = 0;
-    for (int i = 0; i < MAX_STATES; i++) {
-        aut->accepting_states[i] = false;
-    }
-}
-
-// Ajouter une transition
-void add_transition(Automaton *aut, int from, int to, char symbol) {
-    if (aut->num_transitions < MAX_TRANSITIONS) {
-        aut->transitions[aut->num_transitions].from_state = from;
-        aut->transitions[aut->num_transitions].to_state = to;
-        aut->transitions[aut->num_transitions].symbol = symbol;
-        aut->num_transitions++;
-    }
-}
-
-// Ajouter un symbole à l'alphabet
-void add_to_alphabet(Automaton *aut, char symbol) {
-    if (symbol == '\0') return; // Ignore epsilon
-    for (int i = 0; i < aut->alphabet_size; i++) {
-        if (aut->alphabet[i] == symbol) return; // Déjà présent
-    }
-    aut->alphabet[aut->alphabet_size++] = symbol;
-}
-
-// Afficher un automate
-void print_automaton(Automaton *aut, const char *name) {
-    printf("\n=== %s ===\n", name);
-    printf("Nombre d'états: %d\n", aut->num_states);
-    printf("État initial: q%d\n", aut->initial_state);
+// AFN pour identificateur: [a-zA-Z_][a-zA-Z0-9_]*
+void create_identifier_nfa(Automaton* nfa) {
+    nfa->num_states = 5;
+    nfa->states = (State*)malloc(nfa->num_states * sizeof(State));
     
-    printf("États acceptants: ");
-    for (int i = 0; i < aut->num_states; i++) {
-        if (aut->accepting_states[i]) {
-            printf("q%d ", i);
+    // États
+    nfa->states[0] = (State){0, false}; // initial
+    nfa->states[1] = (State){1, false};
+    nfa->states[2] = (State){2, true};  // final
+    nfa->states[3] = (State){3, false};
+    nfa->states[4] = (State){4, false};
+    
+    nfa->initial_state = 0;
+    
+    // Transitions
+    nfa->num_transitions = 6;
+    nfa->transitions = (Transition*)malloc(nfa->num_transitions * sizeof(Transition));
+    
+    // Première partie: [a-zA-Z_]
+    nfa->transitions[0] = (Transition){0, 1, 'L'}; // L = lettre ou _
+    nfa->transitions[1] = (Transition){1, 2, '\0'}; // epsilon
+    
+    // Deuxième partie: [a-zA-Z0-9_]*
+    nfa->transitions[2] = (Transition){2, 3, '\0'}; // epsilon vers boucle
+    nfa->transitions[3] = (Transition){3, 4, 'A'}; // A = alphanum ou _
+    nfa->transitions[4] = (Transition){4, 3, '\0'}; // epsilon retour
+    nfa->transitions[5] = (Transition){4, 2, '\0'}; // epsilon vers final
+}
+
+// Conversion AFN -> AFD pour identificateur
+bool is_identifier_char_first(char c) {
+    return isalpha(c) || c == '_';
+}
+
+bool is_identifier_char_rest(char c) {
+    return isalnum(c) || c == '_';
+}
+
+bool recognize_identifier_afd(const char* input) {
+    if (!input || strlen(input) == 0) return false;
+    
+    int state = 0; // S0
+    int i = 0;
+    
+    while (input[i] != '\0') {
+        char c = input[i];
+        
+        switch(state) {
+            case 0: // S0
+                if (is_identifier_char_first(c)) {
+                    state = 1; // SF (état final)
+                } else {
+                    return false;
+                }
+                break;
+                
+            case 1: // SF
+                if (is_identifier_char_rest(c)) {
+                    state = 1; // reste en SF
+                } else {
+                    return false;
+                }
+                break;
+                
+            default:
+                return false;
         }
+        i++;
     }
+    
+    // On accepte si on est dans l'état final (SF = 1)
+    return (state == 1);
+}
+
+// =========================== AUTOMATE MOT-CLÉ SOIT ===========================
+
+bool recognize_soit(const char* input) {
+    return (strcmp(input, "SOIT") == 0);
+}
+
+// =========================== AUTOMATE MOT-CLÉ dans ===========================
+
+bool recognize_dans(const char* input) {
+    return (strcmp(input, "dans") == 0);
+}
+
+// =========================== AUTOMATE ENTIER ===========================
+
+bool recognize_integer_afd(const char* input) {
+    if (!input || strlen(input) == 0) return false;
+    
+    int state = 0; // S0
+    int i = 0;
+    
+    while (input[i] != '\0') {
+        char c = input[i];
+        
+        switch(state) {
+            case 0: // S0
+                if (isdigit(c)) {
+                    state = 1; // SF
+                } else {
+                    return false;
+                }
+                break;
+                
+            case 1: // SF
+                if (isdigit(c)) {
+                    state = 1; // reste en SF
+                } else {
+                    return false;
+                }
+                break;
+                
+            default:
+                return false;
+        }
+        i++;
+    }
+    
+    return (state == 1);
+}
+
+// =========================== AUTOMATE RÉEL ===========================
+
+bool recognize_real_afd(const char* input) {
+    if (!input || strlen(input) == 0) return false;
+    
+    int state = 0; // S0
+    int i = 0;
+    bool has_dot = false;
+    
+    while (input[i] != '\0') {
+        char c = input[i];
+        
+        switch(state) {
+            case 0: // S0
+                if (isdigit(c)) {
+                    state = 1;
+                } else {
+                    return false;
+                }
+                break;
+                
+            case 1: // partie entière
+                if (isdigit(c)) {
+                    state = 1;
+                } else if (c == '.' && !has_dot) {
+                    has_dot = true;
+                    state = 2;
+                } else {
+                    return false;
+                }
+                break;
+                
+            case 2: // après le point
+                if (isdigit(c)) {
+                    state = 3; // SF
+                } else {
+                    return false;
+                }
+                break;
+                
+            case 3: // SF (partie décimale)
+                if (isdigit(c)) {
+                    state = 3;
+                } else {
+                    return false;
+                }
+                break;
+                
+            default:
+                return false;
+        }
+        i++;
+    }
+    
+    return (state == 3 && has_dot);
+}
+
+// =========================== AUTOMATE COMPLEXE ===========================
+
+bool recognize_complex_afd(const char* input) {
+    if (!input || strlen(input) == 0) return false;
+    
+    int state = 0;
+    int i = 0;
+    bool has_real_dot = false;
+    bool has_imag_dot = false;
+    bool has_operator = false;
+    
+    while (input[i] != '\0') {
+        char c = input[i];
+        
+        switch(state) {
+            case 0: // S0 - début
+                if (isdigit(c)) {
+                    state = 1;
+                } else {
+                    return false;
+                }
+                break;
+                
+            case 1: // partie réelle entière
+                if (isdigit(c)) {
+                    state = 1;
+                } else if (c == '.' && !has_real_dot) {
+                    has_real_dot = true;
+                    state = 2;
+                } else if (c == '+' || c == '-') {
+                    has_operator = true;
+                    state = 4;
+                } else {
+                    return false;
+                }
+                break;
+                
+            case 2: // après point partie réelle
+                if (isdigit(c)) {
+                    state = 3;
+                } else {
+                    return false;
+                }
+                break;
+                
+            case 3: // partie réelle décimale
+                if (isdigit(c)) {
+                    state = 3;
+                } else if (c == '+' || c == '-') {
+                    has_operator = true;
+                    state = 4;
+                } else {
+                    return false;
+                }
+                break;
+                
+            case 4: // après +/-
+                if (isdigit(c)) {
+                    state = 5;
+                } else {
+                    return false;
+                }
+                break;
+                
+            case 5: // partie imaginaire entière
+                if (isdigit(c)) {
+                    state = 5;
+                } else if (c == '.' && !has_imag_dot) {
+                    has_imag_dot = true;
+                    state = 6;
+                } else if (c == 'i') {
+                    state = 8; // SF
+                } else {
+                    return false;
+                }
+                break;
+                
+            case 6: // après point partie imaginaire
+                if (isdigit(c)) {
+                    state = 7;
+                } else {
+                    return false;
+                }
+                break;
+                
+            case 7: // partie imaginaire décimale
+                if (isdigit(c)) {
+                    state = 7;
+                } else if (c == 'i') {
+                    state = 8; // SF
+                } else {
+                    return false;
+                }
+                break;
+                
+            case 8: // SF - après 'i'
+                return false; // rien après 'i'
+                
+            default:
+                return false;
+        }
+        i++;
+    }
+    
+    return (state == 8 && has_operator);
+}
+
+// =========================== AUTOMATE AFFECTATION ===========================
+
+bool recognize_assignment(const char* input) {
+    return (strcmp(input, "<-") == 0);
+}
+
+// =========================== FONCTION PRINCIPALE D'ANALYSE ===========================
+
+typedef enum {
+    TYPE_UNKNOWN,
+    TYPE_IDENTIFIER,
+    TYPE_SOIT,
+    TYPE_DANS,
+    TYPE_INTEGER,
+    TYPE_REAL,
+    TYPE_COMPLEX,
+    TYPE_ASSIGNMENT
+} TokenType;
+
+const char* type_to_string(TokenType type) {
+    switch(type) {
+        case TYPE_IDENTIFIER: return "IDENTIFICATEUR";
+        case TYPE_SOIT: return "MOT-CLE (SOIT)";
+        case TYPE_DANS: return "MOT-CLE (dans)";
+        case TYPE_INTEGER: return "ENTIER";
+        case TYPE_REAL: return "NOMBRE REEL";
+        case TYPE_COMPLEX: return "NOMBRE COMPLEXE";
+        case TYPE_ASSIGNMENT: return "OPERATEUR (Affectation <-)";
+        default: return "TYPE NON EXISTANT";
+    }
+}
+
+TokenType analyze_string(const char* input) {
+    // Ordre de vérification important
+    if (recognize_soit(input)) return TYPE_SOIT;
+    if (recognize_dans(input)) return TYPE_DANS;
+    if (recognize_assignment(input)) return TYPE_ASSIGNMENT;
+    if (recognize_complex_afd(input)) return TYPE_COMPLEX;
+    if (recognize_real_afd(input)) return TYPE_REAL;
+    if (recognize_integer_afd(input)) return TYPE_INTEGER;
+    if (recognize_identifier_afd(input)) return TYPE_IDENTIFIER;
+    
+    return TYPE_UNKNOWN;
+}
+
+// =========================== INTERFACE UTILISATEUR ===========================
+
+void print_box_line(const char* text, int width, char border_char) {
+    printf("%c ", border_char);
+    printf("%-*s", width-2, text);
+    printf("%c\n", border_char);
+}
+
+void print_header() {
+    const int width = 66;
+    
+    printf("\n");
+    for(int i = 0; i < width; i++) printf("=");
+    printf("\n");
+    print_box_line("         ANALYSEUR LEXICAL INTERACTIF", width, '|');
+    for(int i = 0; i < width; i++) printf("=");
+    printf("\n");
+    print_box_line("  Types reconnus:", width, '|');
+    print_box_line("  - IDENTIFICATEUR: [a-zA-Z_][a-zA-Z0-9_]*", width, '|');
+    print_box_line("  - MOT-CLE: SOIT, dans", width, '|');
+    print_box_line("  - ENTIER: [0-9]+", width, '|');
+    print_box_line("  - NOMBRE REEL: [0-9]+.[0-9]+", width, '|');
+    print_box_line("  - NOMBRE COMPLEXE: [0-9]+(.[0-9]+)?(+|-)[0-9]+(.[0-9]+)?i", width, '|');
+    print_box_line("  - AFFECTATION: <-", width, '|');
+    for(int i = 0; i < width; i++) printf("=");
+    printf("\n\n");
+}
+
+void print_result(const char* input, TokenType type) {
+    const int width = 66;
+    char buffer[256];
+    
+    printf("\n");
+    for(int i = 0; i < width; i++) printf("-");
+    printf("\n");
+    print_box_line(" RESULTAT DE L'ANALYSE", width, '|');
+    for(int i = 0; i < width; i++) printf("-");
     printf("\n");
     
-    printf("Transitions:\n");
-    for (int i = 0; i < aut->num_transitions; i++) {
-        if (aut->transitions[i].symbol == '\0') {
-            printf("  q%d --ε--> q%d\n", 
-                   aut->transitions[i].from_state,
-                   aut->transitions[i].to_state);
-        } else {
-            printf("  q%d --%c--> q%d\n", 
-                   aut->transitions[i].from_state,
-                   aut->transitions[i].symbol,
-                   aut->transitions[i].to_state);
-        }
-    }
+    snprintf(buffer, sizeof(buffer), " Chaine: %s", input);
+    print_box_line(buffer, width, '|');
+    
+    snprintf(buffer, sizeof(buffer), " Type  : %s", type_to_string(type));
+    print_box_line(buffer, width, '|');
+    
+    for(int i = 0; i < width; i++) printf("-");
+    printf("\n");
 }
 
-// Calculer l'epsilon-fermeture d'un état
-void epsilon_closure(Automaton *aut, int state, bool *visited) {
-    visited[state] = true;
-    
-    for (int i = 0; i < aut->num_transitions; i++) {
-        if (aut->transitions[i].from_state == state && 
-            aut->transitions[i].symbol == '\0' && 
-            !visited[aut->transitions[i].to_state]) {
-            epsilon_closure(aut, aut->transitions[i].to_state, visited);
-        }
-    }
+void print_examples() {
+    printf("\n Exemples de chaines valides:\n");
+    printf("   - Identificateur: variable1, _temp, MyVar\n");
+    printf("   - Entier: 123, 456\n");
+    printf("   - Reel: 3.14, 0.5\n");
+    printf("   - Complexe: 3+4i, 2.5-1.2i\n");
+    printf("   - Mot-cle: SOIT, dans\n");
+    printf("   - Affectation: <-\n\n");
 }
-
-// Calculer l'epsilon-fermeture d'un ensemble d'états
-void epsilon_closure_set(Automaton *aut, StateSet *set, StateSet *result) {
-    bool visited[MAX_STATES] = {false};
-    
-    for (int i = 0; i < set->size; i++) {
-        epsilon_closure(aut, set->states[i], visited);
-    }
-    
-    result->size = 0;
-    for (int i = 0; i < aut->num_states; i++) {
-        if (visited[i]) {
-            result->states[result->size++] = i;
-        }
-    }
-}
-
-// Calculer la transition d'un ensemble d'états avec un symbole
-void move(Automaton *aut, StateSet *set, char symbol, StateSet *result) {
-    result->size = 0;
-    bool added[MAX_STATES] = {false};
-    
-    for (int i = 0; i < set->size; i++) {
-        int state = set->states[i];
-        for (int j = 0; j < aut->num_transitions; j++) {
-            if (aut->transitions[j].from_state == state && 
-                aut->transitions[j].symbol == symbol &&
-                !added[aut->transitions[j].to_state]) {
-                result->states[result->size++] = aut->transitions[j].to_state;
-                added[aut->transitions[j].to_state] = true;
-            }
-        }
-    }
-}
-
-// Comparer deux ensembles d'états
-bool state_sets_equal(StateSet *s1, StateSet *s2) {
-    if (s1->size != s2->size) return false;
-    
-    for (int i = 0; i < s1->size; i++) {
-        bool found = false;
-        for (int j = 0; j < s2->size; j++) {
-            if (s1->states[i] == s2->states[j]) {
-                found = true;
-                break;
-            }
-        }
-        if (!found) return false;
-    }
-    return true;
-}
-
-// Convertir AFN en AFD (construction des sous-ensembles)
-void nfa_to_dfa(Automaton *nfa, Automaton *dfa) {
-    init_automaton(dfa);
-    
-    StateSet dfa_states[MAX_STATES];
-    int num_dfa_states = 0;
-    
-    // État initial du DFA = epsilon-fermeture de l'état initial du NFA
-    StateSet initial_set;
-    initial_set.size = 1;
-    initial_set.states[0] = nfa->initial_state;
-    
-    epsilon_closure_set(nfa, &initial_set, &dfa_states[0]);
-    num_dfa_states = 1;
-    dfa->initial_state = 0;
-    
-    // Copier l'alphabet
-    memcpy(dfa->alphabet, nfa->alphabet, nfa->alphabet_size);
-    dfa->alphabet_size = nfa->alphabet_size;
-    
-    // Construction des états et transitions du DFA
-    int current = 0;
-    while (current < num_dfa_states) {
-        StateSet *current_set = &dfa_states[current];
-        
-        // Vérifier si cet ensemble contient un état acceptant
-        for (int i = 0; i < current_set->size; i++) {
-            if (nfa->accepting_states[current_set->states[i]]) {
-                dfa->accepting_states[current] = true;
-                break;
-            }
-        }
-        
-        // Pour chaque symbole de l'alphabet
-        for (int sym = 0; sym < nfa->alphabet_size; sym++) {
-            char symbol = nfa->alphabet[sym];
-            
-            StateSet move_result, closure_result;
-            move(nfa, current_set, symbol, &move_result);
-            
-            if (move_result.size == 0) continue;
-            
-            epsilon_closure_set(nfa, &move_result, &closure_result);
-            
-            // Chercher si cet ensemble existe déjà
-            int target_state = -1;
-            for (int i = 0; i < num_dfa_states; i++) {
-                if (state_sets_equal(&closure_result, &dfa_states[i])) {
-                    target_state = i;
-                    break;
-                }
-            }
-            
-            // Si l'ensemble n'existe pas, le créer
-            if (target_state == -1) {
-                target_state = num_dfa_states;
-                dfa_states[num_dfa_states] = closure_result;
-                num_dfa_states++;
-            }
-            
-            // Ajouter la transition
-            add_transition(dfa, current, target_state, symbol);
-        }
-        
-        current++;
-    }
-    
-    dfa->num_states = num_dfa_states;
-}
-
-// ==================== Construction d'AFN pour différentes expressions ====================
-
-// AFN pour Identificateur: [a-zA-Z_][a-zA-Z0-9_]*
-void build_identifier_nfa(Automaton *aut) {
-    init_automaton(aut);
-    aut->num_states = 6;
-    aut->initial_state = 0;
-    aut->accepting_states[2] = true;
-    aut->accepting_states[5] = true;
-    
-    // Construction selon Thompson
-    // q0 --[a-zA-Z_]--> q1
-    for (char c = 'a'; c <= 'z'; c++) {
-        add_transition(aut, 0, 1, c);
-        add_to_alphabet(aut, c);
-    }
-    for (char c = 'A'; c <= 'Z'; c++) {
-        add_transition(aut, 0, 1, c);
-        add_to_alphabet(aut, c);
-    }
-    add_transition(aut, 0, 1, '_');
-    add_to_alphabet(aut, '_');
-    
-    // q1 --epsilon--> q2 (acceptant - identificateur d'un seul caractère valide)
-    add_transition(aut, 1, 2, '\0');
-    
-    // q2 --epsilon--> q5 (peut accepter directement)
-    add_transition(aut, 2, 5, '\0');
-    
-    // q2 --epsilon--> q3 (pour continuer la boucle de Kleene)
-    add_transition(aut, 2, 3, '\0');
-    
-    // q3 --[a-zA-Z0-9_]--> q4
-    for (char c = 'a'; c <= 'z'; c++) {
-        add_transition(aut, 3, 4, c);
-    }
-    for (char c = 'A'; c <= 'Z'; c++) {
-        add_transition(aut, 3, 4, c);
-    }
-    for (char c = '0'; c <= '9'; c++) {
-        add_transition(aut, 3, 4, c);
-        add_to_alphabet(aut, c);
-    }
-    add_transition(aut, 3, 4, '_');
-    
-    // q4 --epsilon--> q3 (boucle pour répéter)
-    add_transition(aut, 4, 3, '\0');
-    
-    // q4 --epsilon--> q5 (état final)
-    add_transition(aut, 4, 5, '\0');
-}
-
-// AFN pour Entier: [0-9]+
-void build_integer_nfa(Automaton *aut) {
-    init_automaton(aut);
-    aut->num_states = 5;
-    aut->initial_state = 0;
-    aut->accepting_states[4] = true;
-    
-    // q0 --[0-9]--> q1
-    for (char c = '0'; c <= '9'; c++) {
-        add_transition(aut, 0, 1, c);
-        add_to_alphabet(aut, c);
-    }
-    
-    // q1 --epsilon--> q2
-    add_transition(aut, 1, 2, '\0');
-    
-    // q1 --epsilon--> q4
-    add_transition(aut, 1, 4, '\0');
-    
-    // q2 --[0-9]--> q3
-    for (char c = '0'; c <= '9'; c++) {
-        add_transition(aut, 2, 3, c);
-    }
-    
-    // q3 --epsilon--> q4
-    add_transition(aut, 3, 4, '\0');
-    
-    // q3 --epsilon--> q2 (boucle)
-    add_transition(aut, 3, 2, '\0');
-}
-
-// AFN pour mot-clé "SOIT"
-void build_soit_nfa(Automaton *aut) {
-    init_automaton(aut);
-    aut->num_states = 5;
-    aut->initial_state = 0;
-    aut->accepting_states[4] = true;
-    
-    add_transition(aut, 0, 1, 'S');
-    add_transition(aut, 1, 2, 'O');
-    add_transition(aut, 2, 3, 'I');
-    add_transition(aut, 3, 4, 'T');
-    
-    add_to_alphabet(aut, 'S');
-    add_to_alphabet(aut, 'O');
-    add_to_alphabet(aut, 'I');
-    add_to_alphabet(aut, 'T');
-}
-
-// AFN pour mot-clé "dans"
-void build_dans_nfa(Automaton *aut) {
-    init_automaton(aut);
-    aut->num_states = 5;
-    aut->initial_state = 0;
-    aut->accepting_states[4] = true;
-    
-    add_transition(aut, 0, 1, 'd');
-    add_transition(aut, 1, 2, 'a');
-    add_transition(aut, 2, 3, 'n');
-    add_transition(aut, 3, 4, 's');
-    
-    add_to_alphabet(aut, 'd');
-    add_to_alphabet(aut, 'a');
-    add_to_alphabet(aut, 'n');
-    add_to_alphabet(aut, 's');
-}
-
-// AFN pour Nombre réel: [0-9]+\.[0-9]+
-void build_real_nfa(Automaton *aut) {
-    init_automaton(aut);
-    aut->num_states = 4;
-    aut->initial_state = 0;
-    aut->accepting_states[3] = true;
-    
-    // q0 --[0-9]--> q1
-    for (char c = '0'; c <= '9'; c++) {
-        add_transition(aut, 0, 1, c);
-        add_to_alphabet(aut, c);
-    }
-    
-    // q1 --[0-9]--> q1 (boucle)
-    for (char c = '0'; c <= '9'; c++) {
-        add_transition(aut, 1, 1, c);
-    }
-    
-    // q1 --.--> q2
-    add_transition(aut, 1, 2, '.');
-    add_to_alphabet(aut, '.');
-    
-    // q2 --[0-9]--> q3
-    for (char c = '0'; c <= '9'; c++) {
-        add_transition(aut, 2, 3, c);
-    }
-    
-    // q3 --[0-9]--> q3 (boucle)
-    for (char c = '0'; c <= '9'; c++) {
-        add_transition(aut, 3, 3, c);
-    }
-}
-
-// AFN pour Nombre complexe: [0-9]+(\.[0-9]+)?(+|-)[0-9]+(\.[0-9]+)?i
-void build_complex_nfa(Automaton *aut) {
-    init_automaton(aut);
-    aut->num_states = 17;
-    aut->initial_state = 0;
-    aut->accepting_states[16] = true;
-    
-    // Partie réelle: [0-9]+
-    // q0 --[0-9]--> q1
-    for (char c = '0'; c <= '9'; c++) {
-        add_transition(aut, 0, 1, c);
-        add_to_alphabet(aut, c);
-    }
-    
-    // q1 --[0-9]--> q1 (boucle)
-    for (char c = '0'; c <= '9'; c++) {
-        add_transition(aut, 1, 1, c);
-    }
-    
-    // Partie décimale optionnelle: (\.[0-9]+)?
-    // q1 --epsilon--> q2
-    add_transition(aut, 1, 2, '\0');
-    
-    // q2 --.--> q3
-    add_transition(aut, 2, 3, '.');
-    add_to_alphabet(aut, '.');
-    
-    // q3 --[0-9]--> q4
-    for (char c = '0'; c <= '9'; c++) {
-        add_transition(aut, 3, 4, c);
-    }
-    
-    // q4 --[0-9]--> q4 (boucle)
-    for (char c = '0'; c <= '9'; c++) {
-        add_transition(aut, 4, 4, c);
-    }
-    
-    // q4 --epsilon--> q5
-    add_transition(aut, 4, 5, '\0');
-    
-    // q1 --epsilon--> q5 (skip décimale)
-    add_transition(aut, 1, 5, '\0');
-    
-    // Opérateur +|-
-    // q5 --epsilon--> q6 (pour -)
-    add_transition(aut, 5, 6, '\0');
-    
-    // q6 ----> q7
-    add_transition(aut, 6, 7, '-');
-    add_to_alphabet(aut, '-');
-    
-    // q5 --epsilon--> q8 (pour +)
-    add_transition(aut, 5, 8, '\0');
-    
-    // q8 --+--> q9
-    add_transition(aut, 8, 9, '+');
-    add_to_alphabet(aut, '+');
-    
-    // q7 --epsilon--> q10
-    add_transition(aut, 7, 10, '\0');
-    
-    // q9 --epsilon--> q10
-    add_transition(aut, 9, 10, '\0');
-    
-    // Partie imaginaire: [0-9]+
-    // q10 --[0-9]--> q11
-    for (char c = '0'; c <= '9'; c++) {
-        add_transition(aut, 10, 11, c);
-    }
-    
-    // q11 --[0-9]--> q11 (boucle)
-    for (char c = '0'; c <= '9'; c++) {
-        add_transition(aut, 11, 11, c);
-    }
-    
-    // Partie décimale optionnelle: (\.[0-9]+)?
-    // q11 --epsilon--> q12
-    add_transition(aut, 11, 12, '\0');
-    
-    // q12 --.--> q13
-    add_transition(aut, 12, 13, '.');
-    
-    // q13 --[0-9]--> q14
-    for (char c = '0'; c <= '9'; c++) {
-        add_transition(aut, 13, 14, c);
-    }
-    
-    // q14 --[0-9]--> q14 (boucle)
-    for (char c = '0'; c <= '9'; c++) {
-        add_transition(aut, 14, 14, c);
-    }
-    
-    // q14 --epsilon--> q15
-    add_transition(aut, 14, 15, '\0');
-    
-    // q11 --epsilon--> q15 (skip décimale)
-    add_transition(aut, 11, 15, '\0');
-    
-    // q15 --i--> q16
-    add_transition(aut, 15, 16, 'i');
-    add_to_alphabet(aut, 'i');
-}
-
-// AFN pour affectation "<-"
-void build_affectation_nfa(Automaton *aut) {
-    init_automaton(aut);
-    aut->num_states = 3;
-    aut->initial_state = 0;
-    aut->accepting_states[2] = true;
-    
-    add_transition(aut, 0, 1, '<');
-    add_transition(aut, 1, 2, '-');
-    
-    add_to_alphabet(aut, '<');
-    add_to_alphabet(aut, '-');
-}
-
-// ==================== Programme Principal ====================
 
 int main() {
-    Automaton nfa, dfa;
+    char input[256];
     
-    printf("╔════════════════════════════════════════════════════════════════╗\n");
-    printf("║   Construction AFN et AFD - Analyse Lexicale Manuelle          ║\n");
-    printf("╚════════════════════════════════════════════════════════════════╝\n");
+    #ifdef _WIN32
+    SetConsoleOutputCP(65001);
+    #endif
     
-    // Test 1: Identificateur (CORRIGÉ)
-    printf("\n\n┌─────────────────────────────────────────────────────────────────┐\n");
-    printf("│ 1. IDENTIFICATEUR: [a-zA-Z_][a-zA-Z0-9_]*                       │\n");
-    printf("└─────────────────────────────────────────────────────────────────┘\n");
+    print_header();
     
-    build_identifier_nfa(&nfa);
-    print_automaton(&nfa, "AFN - Identificateur");
-    
-    nfa_to_dfa(&nfa, &dfa);
-    print_automaton(&dfa, "AFD - Identificateur");
-    
-    // Test 2: Mot-clé SOIT
-    printf("\n\n┌─────────────────────────────────────────────────────────────┐\n");
-    printf("│ 2. MOT-CLÉ: SOIT                                            │\n");
-    printf("└─────────────────────────────────────────────────────────────┘\n");
-    
-    build_soit_nfa(&nfa);
-    print_automaton(&nfa, "AFN/AFD - SOIT (déjà déterministe)");
-    
-    // Test 3: Mot-clé dans
-    printf("\n\n┌─────────────────────────────────────────────────────────────┐\n");
-    printf("│ 3. MOT-CLÉ: dans                                            │\n");
-    printf("└─────────────────────────────────────────────────────────────┘\n");
-    
-    build_dans_nfa(&nfa);
-    print_automaton(&nfa, "AFN/AFD - dans (déjà déterministe)");
-    
-    // Test 4: Entier
-    printf("\n\n┌─────────────────────────────────────────────────────────────┐\n");
-    printf("│ 4. ENTIER: [0-9]+                                           │\n");
-    printf("└─────────────────────────────────────────────────────────────┘\n");
-    
-    build_integer_nfa(&nfa);
-    print_automaton(&nfa, "AFN - Entier");
-    
-    nfa_to_dfa(&nfa, &dfa);
-    print_automaton(&dfa, "AFD - Entier");
-    
-    // Test 5: Nombre réel
-    printf("\n\n┌─────────────────────────────────────────────────────────────┐\n");
-    printf("│ 5. NOMBRE RÉEL: [0-9]+\\.[0-9]+                              │\n");
-    printf("└─────────────────────────────────────────────────────────────┘\n");
-    
-    build_real_nfa(&nfa);
-    print_automaton(&nfa, "AFN/AFD - Nombre réel (déjà déterministe)");
-    
-    // Test 6: Nombre complexe
-    printf("\n\n┌─────────────────────────────────────────────────────────────┐\n");
-    printf("│ 6. NOMBRE COMPLEXE: [0-9]+(\\.[0-9]+)?(+|-)[0-9]+(\\.[0-9]+)?i│\n");
-    printf("└─────────────────────────────────────────────────────────────┘\n");
-    
-    build_complex_nfa(&nfa);
-    print_automaton(&nfa, "AFN - Nombre complexe");
-    
-    nfa_to_dfa(&nfa, &dfa);
-    print_automaton(&dfa, "AFD - Nombre complexe");
-    
-    // Test 7: Affectation
-    printf("\n\n┌─────────────────────────────────────────────────────────────┐\n");
-    printf("│ 7. AFFECTATION: <-                                          │\n");
-    printf("└─────────────────────────────────────────────────────────────┘\n");
-    
-    build_affectation_nfa(&nfa);
-    print_automaton(&nfa, "AFN/AFD - Affectation (déjà déterministe)");
-    
-    printf("\n\n╔════════════════════════════════════════════════════════════════╗\n");
-    printf("║   Résumé de l'analyse                                          ║\n");
-    printf("╠════════════════════════════════════════════════════════════════╣\n");
-    printf("║   Tokens implémentés: 7                                        ║\n");
-    printf("║   - 1 Identificateur [a-zA-Z_][a-zA-Z0-9_]*                    ║\n");
-    printf("║   - 2 Mots-clés (SOIT, dans)                                   ║\n");
-    printf("║   - 3 Types numériques (Entier, Réel, Complexe)                ║\n");
-    printf("║   - 1 Opérateur (Affectation)                                  ║\n");
-    printf("╚════════════════════════════════════════════════════════════════╝\n\n");
+    while(1) {
+        for(int i = 0; i < 66; i++) printf("-");
+        printf("\n");
+        print_box_line(" Entrez une chaine a analyser (ou 'quit' pour quitter):", 66, '|');
+        for(int i = 0; i < 66; i++) printf("-");
+        printf("\n>>> ");
+        
+        if (!fgets(input, sizeof(input), stdin)) break;
+        
+        // Enlever le '\n'
+        input[strcspn(input, "\n")] = 0;
+        
+        if (strcmp(input, "quit") == 0) {
+            printf("\nAu revoir!\n");
+            break;
+        }
+        
+        TokenType type = analyze_string(input);
+        print_result(input, type);
+        
+        if (type == TYPE_UNKNOWN) {
+            print_examples();
+        }
+    }
     
     return 0;
 }
