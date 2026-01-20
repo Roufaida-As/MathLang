@@ -97,8 +97,6 @@ int token_to_symbol(int token_code) {
     }
     
     // Debug: afficher ce qu'on cherche
-    printf("DEBUG token_to_symbol: token_code %d non trouvé!\n", token_code);
-    printf("DEBUG: Symboles terminaux disponibles:\n");
     for (int i = 0; i < nb_symbols; i++) {
         if (symbols[i].is_terminal) {
             printf("  [%d] %s -> token_code=%d\n", i, symbols[i].name, symbols[i].token_code);
