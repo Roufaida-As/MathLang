@@ -510,12 +510,12 @@ int main() {
         
         // Quitter si demandé
         if (strcmp(input, "quit") == 0 || strcmp(input, "exit") == 0) {
-            printf("\n👋 Au revoir!\n");
+            printf("\n Au revoir!\n");
             break;
         }
         
         if (strlen(input) == 0) {
-            printf("\n⚠️  Veuillez entrer une chaîne non vide.\n\n");
+            printf("\n  Veuillez entrer une chaîne non vide.\n\n");
             continue;
         }
         
@@ -531,7 +531,7 @@ int main() {
         
         // Exemples si type non reconnu
         if (strcmp(result, "TYPE NON EXISTANT") == 0) {
-            printf("💡 Exemples de chaînes valides:\n");
+            printf("  Exemples de chaînes valides:\n");
             printf("   - Identificateur: variable1, _temp, MyVar\n");
             printf("   - Entier: 123, 456\n");
             printf("   - Réel: 3.14, 0.5\n");
@@ -543,3 +543,4 @@ int main() {
     
     return 0;
 }
+
