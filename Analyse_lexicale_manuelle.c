@@ -262,9 +262,6 @@ void build_identifier_nfa(Automaton *aut) {
         add_to_alphabet(aut, c);
     }
     add_transition(aut, 1, 1, '_');
-    
-    // DEBUG
-    print_automaton_debug(aut, "IDENTIFICATEUR NFA");
 }
 // AFN pour Entier: [0-9]+
 void build_integer_nfa(Automaton *aut) {
