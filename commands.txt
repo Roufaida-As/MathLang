@@ -1,5 +1,4 @@
-cd /mnt/c/Users/rofa/Desktop/MathLang
-
+cd "/mnt/c/Users/DELL PRECISION/rofa/MathLang"
 
 voici les commandes pour tester l'analyse lexical manuelle :
 1- gcc Analyse_lexicale_manuelle.c -o analyse_lexicale_manuelle

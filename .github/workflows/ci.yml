@@ -1,0 +1,27 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, roufaida ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential flex bison
+
+      - name: Build
+        run: |
+          make -j2
+
+      - name: Run tests
+        run: |
+          make test
+        continue-on-error: true

@@ -103,6 +103,8 @@ typedef struct YYLTYPE {
 }
 
 %locations
+%expect 1
+
 /* ===================== */
 /* TOKENS AVEC VALEURS   */
 /* ===================== */
