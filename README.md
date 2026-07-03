@@ -83,6 +83,21 @@ MathLang/
 - Bison (analyseur syntaxique)
 - Make
 
+### Compilation rapide (Makefile)
+
+Un `Makefile` a été ajouté pour automatiser la génération du scanner/parser, la compilation et l'exécution des tests.
+
+Commandes principales:
+
+```
+make        # génère le binaire ./parser
+make test   # exécute ./parser sur tous les fichiers dans tests/
+make memcheck # exécute valgrind (si présent) sur la suite principale
+make clean  # nettoie les fichiers générés
+```
+
+Une action GitHub CI est fournie dans `.github/workflows/ci.yml` pour compiler, exécuter les tests et lancer une vérification mémoire automatique.
+
 
 ---
 
