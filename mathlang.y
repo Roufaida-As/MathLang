@@ -5,6 +5,7 @@
 #include "symbol_table.h"
 #include "quadruplet.h"
 #include "expr_info.h"
+#include "codegen_c.h"
 
 extern int yylex();
 extern int line_num;
@@ -17,6 +18,50 @@ const char* token_name(int tok);
 /* Table des symboles globale */
 SymbolTable* global_symbol_table = NULL;
 QuadList* quadList = NULL;
+
+#define MAX_FUNCTION_CONTEXT 64
+static DataType function_return_stack[MAX_FUNCTION_CONTEXT];
+static int function_kind_stack[MAX_FUNCTION_CONTEXT];
+static int function_return_seen_stack[MAX_FUNCTION_CONTEXT];
+static int function_context_top = -1;
+
+static void push_function_context(int kind) {
+    if (function_context_top + 1 >= MAX_FUNCTION_CONTEXT) return;
+    function_context_top++;
+    function_kind_stack[function_context_top] = kind;
+    function_return_stack[function_context_top] = TYPE_UNKNOWN;
+    function_return_seen_stack[function_context_top] = 0;
+}
+
+static void set_function_return_type(DataType type) {
+    if (function_context_top >= 0) {
+        function_return_stack[function_context_top] = type;
+    }
+}
+
+static int current_function_kind(void) {
+    return (function_context_top >= 0) ? function_kind_stack[function_context_top] : -1;
+}
+
+static DataType current_function_return_type(void) {
+    return (function_context_top >= 0) ? function_return_stack[function_context_top] : TYPE_UNKNOWN;
+}
+
+static void mark_function_return_seen(void) {
+    if (function_context_top >= 0) {
+        function_return_seen_stack[function_context_top] = 1;
+    }
+}
+
+static int function_return_seen(void) {
+    return (function_context_top >= 0) ? function_return_seen_stack[function_context_top] : 0;
+}
+
+static void pop_function_context(void) {
+    if (function_context_top >= 0) {
+        function_context_top--;
+    }
+}
 
 
 char* expr_to_addr(ExprInfo e) {
@@ -238,11 +283,17 @@ declaration_variable
                 SymbolEntry* entry = find_symbol(global_symbol_table, $2);
                 if (entry) {
                     mark_symbol_initialized(entry);
+                    // GÉNÉRATION DU QUADRUPLET D'INITIALISATION
+                    char* addr = expr_to_addr($8);
+                    createQuad(quadList, QUAD_ASSIGN, addr, NULL, $2);
+                    free(addr);
                 }
             } else {
                 semantic_error("Le nom de variable ne correspond pas", @2.first_line, @2.first_column);
             }
         }
+        if ($8.addr) { free($8.addr); $8.addr = NULL; }
+        free($6);
         free($2);
     }
     ;
@@ -259,11 +310,18 @@ declaration_constante
                 SymbolEntry* entry = find_symbol(global_symbol_table, $2);
                 if (entry) {
                     mark_symbol_initialized(entry);
+                    // GÉNÉRATION DU QUADRUPLET D'INITIALISATION
+                    char* addr = expr_to_addr($8);
+                    createQuad(quadList, QUAD_ASSIGN, addr, NULL, $2);
+                    free(addr);
                 }
             } else {
                 semantic_error("Le nom de constante ne correspond pas", @2.first_line, @2.first_column);
             }
         }
+        if ($8.addr) { free($8.addr); $8.addr = NULL; }
+        free($6);
+        free($2);
     }
     ;
 
@@ -314,13 +372,47 @@ type_base
 /* FONCTIONS             */
 /* ===================== */
 declaration_fonction
-    : TOK_FONCTION TOK_ID TOK_LPAREN TOK_RPAREN TOK_COLON type bloc TOK_FIN
-    | TOK_FONCTION TOK_ID TOK_LPAREN parametres TOK_RPAREN TOK_COLON type bloc TOK_FIN
+    : TOK_FONCTION TOK_ID TOK_LPAREN { if (global_symbol_table) enter_scope(global_symbol_table); push_function_context(SYMBOL_FUNCTION); } TOK_RPAREN TOK_COLON type { set_function_return_type($7); } bloc TOK_FIN {
+        if (global_symbol_table) {
+            exit_scope(global_symbol_table);
+            add_symbol(global_symbol_table, $2, SYMBOL_FUNCTION, TYPE_FUNCTION, SUBTYPE_DEFAULT, @2.first_line, @2.first_column);
+        }
+        if (!function_return_seen()) {
+            semantic_warning("fonction sans return", @2.first_line, @2.first_column);
+        }
+        pop_function_context();
+        if ($2) {  free($2); }
+    }
+    | TOK_FONCTION TOK_ID TOK_LPAREN { if (global_symbol_table) enter_scope(global_symbol_table); push_function_context(SYMBOL_FUNCTION); } parametres TOK_RPAREN TOK_COLON type { set_function_return_type($8); } bloc TOK_FIN {
+        if (global_symbol_table) {
+            exit_scope(global_symbol_table);
+            add_symbol(global_symbol_table, $2, SYMBOL_FUNCTION, TYPE_FUNCTION, SUBTYPE_DEFAULT, @2.first_line, @2.first_column);
+        }
+        if (!function_return_seen()) {
+            semantic_warning("fonction sans return", @2.first_line, @2.first_column);
+        }
+        pop_function_context();
+        if ($2) { free($2); }
+    }
     ;
 
 declaration_procedure
-    : TOK_PROCEDURE TOK_ID TOK_LPAREN TOK_RPAREN bloc TOK_FIN
-    | TOK_PROCEDURE TOK_ID TOK_LPAREN parametres TOK_RPAREN bloc TOK_FIN
+    : TOK_PROCEDURE TOK_ID TOK_LPAREN { if (global_symbol_table) enter_scope(global_symbol_table); push_function_context(SYMBOL_PROCEDURE); } TOK_RPAREN bloc TOK_FIN {
+        if (global_symbol_table) {
+            exit_scope(global_symbol_table);
+            add_symbol(global_symbol_table, $2, SYMBOL_PROCEDURE, TYPE_VOID, SUBTYPE_DEFAULT, @2.first_line, @2.first_column);
+        }
+        pop_function_context();
+        if ($2) {  free($2); }
+    }
+    | TOK_PROCEDURE TOK_ID TOK_LPAREN { if (global_symbol_table) enter_scope(global_symbol_table); push_function_context(SYMBOL_PROCEDURE); } parametres TOK_RPAREN bloc TOK_FIN {
+        if (global_symbol_table) {
+            exit_scope(global_symbol_table);
+            add_symbol(global_symbol_table, $2, SYMBOL_PROCEDURE, TYPE_VOID, SUBTYPE_DEFAULT, @2.first_line, @2.first_column);
+        }
+        pop_function_context();
+        if ($2) { free($2); }
+    }
     ;
 
 parametres
@@ -329,7 +421,14 @@ parametres
     ;
 
 parametre
-    : TOK_ID TOK_COLON type
+    : TOK_ID TOK_COLON type {
+        if (global_symbol_table) {
+            add_symbol(global_symbol_table, $1, SYMBOL_PARAMETER, $3, SUBTYPE_DEFAULT, @1.first_line, @1.first_column);
+            SymbolEntry* entry = find_symbol(global_symbol_table, $1);
+            if (entry) mark_symbol_initialized(entry);
+        }
+        if ($1) { free($1); }
+    }
     ;
 
 /* ===================== */
@@ -353,10 +452,19 @@ instruction
     | instruction_repeter
     | instruction_io
     | TOK_RETOURNER expression {
+        if (current_function_kind() == SYMBOL_PROCEDURE) {
+            semantic_error("return interdit dans une procedure", @1.first_line, @1.first_column);
+        } else if (current_function_kind() != SYMBOL_FUNCTION) {
+            semantic_error("return hors fonction", @1.first_line, @1.first_column);
+        } else if (!check_type_compatibility(current_function_return_type(), $2.type)) {
+            error_type_mismatch(current_function_return_type(), $2.type, @2.first_line, @2.first_column);
+        }
+        mark_function_return_seen();
         // Générer quadruplet de retour
         char* ret_addr = expr_to_addr($2);
         createQuad(quadList, QUAD_RETURN, ret_addr, NULL, NULL);
         free(ret_addr);
+        if ($2.addr) { free($2.addr); $2.addr = NULL; }
     }
     | TOK_SORTIR {
         // BREAK : sortir de la boucle courante
@@ -1561,6 +1669,17 @@ int main(int argc, char **argv) {
 
      /* AFFICHER LES QUADRUPLETS */
     printQuadruplets(quadList);
+
+    if (get_semantic_error_count() == 0) {
+        FILE* out = fopen("output.c", "w");
+        generate_c_code(out, quadList, global_symbol_table);
+        fclose(out);
+        system("gcc output.c -lm -o output");
+        printf("\nCode C genere avec succes : output.c\n");
+    } else {
+        printf("\n%d erreur(s) semantique(s) detectee(s) : generation de code annulee.\n",
+               get_semantic_error_count());
+    }
 
     /* Libérer la mémoire */
     free_symbol_table(global_symbol_table);

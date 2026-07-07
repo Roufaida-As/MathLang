@@ -6,7 +6,7 @@ LDFLAGS = -lm
 
 PARSER = parser
 
-SRCS = symbol_table.c quadruplet.c
+SRCS = symbol_table.c quadruplet.c codegen_c.c
 
 all: $(PARSER)
 
@@ -26,4 +26,4 @@ test: $(PARSER)
 
 
 clean:
-	rm -f $(PARSER) mathlang.tab.c mathlang.tab.h lex.yy.c
+	rm -f $(PARSER) mathlang.tab.c mathlang.tab.h lex.yy.c output
