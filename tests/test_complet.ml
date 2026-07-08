@@ -4,13 +4,13 @@
 # ============================================
 
 SOIT x dans Z tel que x <- 10
-SOIT y dans R tel que y <- 3.14
+SOIT y dans R tel que y <- 3
 SOIT z dans C tel que z <- 2.5 - 3i
 SOIT c dans C tel que c <- 3.0 + 4.0i
 
 # --- Boolean constants and logic ---
 SI vrai et non faux ALORS
-    AFFICHER("Boolean logic OK")
+    AFFICHER_LIGNE("Boolean logic OK")
 FIN
 
 # --- Arithmetic operators ---
@@ -20,12 +20,12 @@ SOIT d dans Z tel que d <- x mod 4
 
 # --- Comparison operators ---
 SI x >= 10 et y < 5 ALORS
-    AFFICHER("Comparisons OK")
+    AFFICHER_LIGNE("Comparisons OK")
 FIN
 
 # --- Control structures ---
 POUR i DE 1 A 10 PAR 2 FAIRE
-    AFFICHER(i)
+    AFFICHER_LIGNE(i)
 FIN
 
 TANT QUE x > 0 FAIRE

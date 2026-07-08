@@ -79,6 +79,24 @@ static int is_numeric_literal(const char* s, int* has_dot) {
     return 1;
 }
 
+/* Reconnait un littéral imaginaire du style "3i", "4.0i", "-2.5j".
+   Si trouvé, copie la partie numérique (sans le suffixe) dans out_num
+   et renvoie 1. */
+static int parse_complex_literal(const char* s, char* out_num, size_t out_size) {
+    if (!s) return 0;
+    size_t len = strlen(s);
+    if (len < 2) return 0;
+    char suffix = s[len - 1];
+    if (suffix != 'i' && suffix != 'j' && suffix != 'I' && suffix != 'J') return 0;
+    if (len - 1 >= out_size) return 0;
+
+    strncpy(out_num, s, len - 1);
+    out_num[len - 1] = '\0';
+
+    int has_dot;
+    return is_numeric_literal(out_num, &has_dot);
+}
+
 /* Déduit le type d'une "addr" (nom de variable, temporaire ou littéral) */
 static DataType resolve_type(const char* addr, SymbolTable* table, TempMap* tmap) {
     if (!addr) return TYPE_UNKNOWN;
@@ -90,6 +108,11 @@ static DataType resolve_type(const char* addr, SymbolTable* table, TempMap* tmap
     int has_dot;
     if (is_numeric_literal(addr, &has_dot)) {
         return has_dot ? TYPE_R : TYPE_Z;
+    }
+
+    char numbuf[64];
+    if (parse_complex_literal(addr, numbuf, sizeof(numbuf))) {
+        return TYPE_C;
     }
 
     /* Priorité à la table des symboles : si le symbole y est encore
@@ -158,6 +181,8 @@ static void infer_types_pass(const QuadList* list, SymbolTable* table, TempMap* 
             case QUAD_ADD:
                 if (t1 == TYPE_SIGMA || t2 == TYPE_SIGMA) {
                     result_type = TYPE_SIGMA; /* concaténation de chaînes */
+                } else if (t1 == TYPE_C || t2 == TYPE_C) {
+                    result_type = TYPE_C;
                 } else {
                     result_type = (t1 == TYPE_R || t2 == TYPE_R) ? TYPE_R : TYPE_Z;
                 }
@@ -167,11 +192,15 @@ static void infer_types_pass(const QuadList* list, SymbolTable* table, TempMap* 
             case QUAD_MUL:
             case QUAD_MOD:
             case QUAD_POW:
-                result_type = (t1 == TYPE_R || t2 == TYPE_R) ? TYPE_R : TYPE_Z;
+                if (t1 == TYPE_C || t2 == TYPE_C) {
+                    result_type = TYPE_C;
+                } else {
+                    result_type = (t1 == TYPE_R || t2 == TYPE_R) ? TYPE_R : TYPE_Z;
+                }
                 break;
 
             case QUAD_DIV:
-                result_type = TYPE_R;
+                result_type = (t1 == TYPE_C || t2 == TYPE_C) ? TYPE_C : TYPE_R;
                 break;
 
             case QUAD_DIV_INT:
@@ -237,6 +266,19 @@ static void infer_types_pass(const QuadList* list, SymbolTable* table, TempMap* 
     }
 }
 
+/* Convertit un opérande en texte C valide. Le seul cas à traiter est
+   le littéral complexe ("3i" -> "(3*I)") : tout le reste passe tel quel. */
+static char* format_operand(const char* addr) {
+    if (!addr) return NULL;
+    char numbuf[64];
+    if (parse_complex_literal(addr, numbuf, sizeof(numbuf))) {
+        char* out = (char*)malloc(strlen(numbuf) + 16);
+        sprintf(out, "(%s*I)", numbuf);
+        return out;
+    }
+    return stringDuplicate(addr);
+}
+
 /* ========================================================= */
 /*  TYPES C CORRESPONDANTS                                    */
 /* ========================================================= */
@@ -248,7 +290,7 @@ static const char* get_c_type(DataType type) {
         case TYPE_B:     return "int";
         case TYPE_CHAR:  return "char";
         case TYPE_SIGMA: return "char*";
-        case TYPE_C:     return "double"; /* TODO étape 6 : struct complexe */
+        case TYPE_C:     return "double complex";
         default:         return "double"; /* valeur par défaut prudente */
     }
 }
@@ -316,6 +358,9 @@ static void emit_write(FILE* out, const char* addr, DataType type) {
 /* ========================================================= */
 
 static void translate_quad(FILE* out, const Quadruplet* q, SymbolTable* table, TempMap* tmap) {
+    char* a1 = format_operand(q->arg1);
+    char* a2 = format_operand(q->arg2);
+
     switch (q->op) {
 
         /* --- Arithmétique --- */
@@ -328,73 +373,81 @@ static void translate_quad(FILE* out, const Quadruplet* q, SymbolTable* table, T
                     "    %s = malloc(strlen(%s) + strlen(%s) + 1);\n"
                     "    strcpy(%s, %s);\n"
                     "    strcat(%s, %s);\n",
-                    q->result, q->arg1, q->arg2,
-                    q->result, q->arg1,
-                    q->result, q->arg2);
+                    q->result, a1, a2,
+                    q->result, a1,
+                    q->result, a2);
             } else {
-                fprintf(out, "    %s = %s + %s;\n", q->result, q->arg1, q->arg2);
+                fprintf(out, "    %s = %s + %s;\n", q->result, a1, a2);
             }
             break;
         }
         case QUAD_SUB:
-            fprintf(out, "    %s = %s - %s;\n", q->result, q->arg1, q->arg2);
+            fprintf(out, "    %s = %s - %s;\n", q->result, a1, a2);
             break;
         case QUAD_MUL:
-            fprintf(out, "    %s = %s * %s;\n", q->result, q->arg1, q->arg2);
+            fprintf(out, "    %s = %s * %s;\n", q->result, a1, a2);
             break;
-        case QUAD_DIV:
-            fprintf(out, "    %s = (double)(%s) / (double)(%s);\n", q->result, q->arg1, q->arg2);
+        case QUAD_DIV: {
+            DataType t1 = resolve_type(q->arg1, table, tmap);
+            DataType t2 = resolve_type(q->arg2, table, tmap);
+            if (t1 == TYPE_C || t2 == TYPE_C) {
+                /* Pas de cast (double) ici : ça tronquerait la partie imaginaire */
+                fprintf(out, "    %s = %s / %s;\n", q->result, a1, a2);
+            } else {
+                fprintf(out, "    %s = (double)(%s) / (double)(%s);\n", q->result, a1, a2);
+            }
             break;
+        }
         case QUAD_DIV_INT:
-            fprintf(out, "    %s = (long)(%s) / (long)(%s);\n", q->result, q->arg1, q->arg2);
+            fprintf(out, "    %s = (long)(%s) / (long)(%s);\n", q->result, a1, a2);
             break;
         case QUAD_MOD:
-            fprintf(out, "    %s = (long)(%s) %% (long)(%s);\n", q->result, q->arg1, q->arg2);
+            fprintf(out, "    %s = (long)(%s) %% (long)(%s);\n", q->result, a1, a2);
             break;
         case QUAD_POW:
-            fprintf(out, "    %s = pow((double)(%s), (double)(%s));\n", q->result, q->arg1, q->arg2);
+            fprintf(out, "    %s = pow((double)(%s), (double)(%s));\n", q->result, a1, a2);
             break;
         case QUAD_NEG:
-            fprintf(out, "    %s = -(%s);\n", q->result, q->arg1);
+            fprintf(out, "    %s = -(%s);\n", q->result, a1);
             break;
 
         /* --- Logique --- */
         case QUAD_AND:
-            fprintf(out, "    %s = (%s) && (%s);\n", q->result, q->arg1, q->arg2);
+            fprintf(out, "    %s = (%s) && (%s);\n", q->result, a1, a2);
             break;
         case QUAD_OR:
-            fprintf(out, "    %s = (%s) || (%s);\n", q->result, q->arg1, q->arg2);
+            fprintf(out, "    %s = (%s) || (%s);\n", q->result, a1, a2);
             break;
         case QUAD_NOT:
-            fprintf(out, "    %s = !(%s);\n", q->result, q->arg1);
+            fprintf(out, "    %s = !(%s);\n", q->result, a1);
             break;
         case QUAD_XOR:
-            fprintf(out, "    %s = (!!(%s)) != (!!(%s));\n", q->result, q->arg1, q->arg2);
+            fprintf(out, "    %s = (!!(%s)) != (!!(%s));\n", q->result, a1, a2);
             break;
 
         /* --- Comparaisons (rarement matérialisées, cf expr_to_addr) --- */
         case QUAD_EQ:
-            fprintf(out, "    %s = (%s) == (%s);\n", q->result, q->arg1, q->arg2);
+            fprintf(out, "    %s = (%s) == (%s);\n", q->result, a1, a2);
             break;
         case QUAD_NEQ:
-            fprintf(out, "    %s = (%s) != (%s);\n", q->result, q->arg1, q->arg2);
+            fprintf(out, "    %s = (%s) != (%s);\n", q->result, a1, a2);
             break;
         case QUAD_LT:
-            fprintf(out, "    %s = (%s) < (%s);\n", q->result, q->arg1, q->arg2);
+            fprintf(out, "    %s = (%s) < (%s);\n", q->result, a1, a2);
             break;
         case QUAD_GT:
-            fprintf(out, "    %s = (%s) > (%s);\n", q->result, q->arg1, q->arg2);
+            fprintf(out, "    %s = (%s) > (%s);\n", q->result, a1, a2);
             break;
         case QUAD_LEQ:
-            fprintf(out, "    %s = (%s) <= (%s);\n", q->result, q->arg1, q->arg2);
+            fprintf(out, "    %s = (%s) <= (%s);\n", q->result, a1, a2);
             break;
         case QUAD_GEQ:
-            fprintf(out, "    %s = (%s) >= (%s);\n", q->result, q->arg1, q->arg2);
+            fprintf(out, "    %s = (%s) >= (%s);\n", q->result, a1, a2);
             break;
 
         /* --- Affectation --- */
         case QUAD_ASSIGN:
-            fprintf(out, "    %s = %s;\n", q->result, q->arg1);
+            fprintf(out, "    %s = %s;\n", q->result, a1);
             break;
 
         /* --- Branchements inconditionnels et conditionnels --- */
@@ -402,64 +455,79 @@ static void translate_quad(FILE* out, const Quadruplet* q, SymbolTable* table, T
             fprintf(out, "    goto L%s;\n", q->result);
             break;
         case QUAD_BZ:
-            fprintf(out, "    if (!(%s)) goto L%s;\n", q->arg1, q->result);
+            fprintf(out, "    if (!(%s)) goto L%s;\n", a1, q->result);
             break;
         case QUAD_BNZ:
-            fprintf(out, "    if (%s) goto L%s;\n", q->arg1, q->result);
+            fprintf(out, "    if (%s) goto L%s;\n", a1, q->result);
             break;
         case QUAD_BG:
-            fprintf(out, "    if ((%s) > (%s)) goto L%s;\n", q->arg1, q->arg2, q->result);
+            fprintf(out, "    if ((%s) > (%s)) goto L%s;\n", a1, a2, q->result);
             break;
         case QUAD_BGE:
-            fprintf(out, "    if ((%s) >= (%s)) goto L%s;\n", q->arg1, q->arg2, q->result);
+            fprintf(out, "    if ((%s) >= (%s)) goto L%s;\n", a1, a2, q->result);
             break;
         case QUAD_BL:
-            fprintf(out, "    if ((%s) < (%s)) goto L%s;\n", q->arg1, q->arg2, q->result);
+            fprintf(out, "    if ((%s) < (%s)) goto L%s;\n", a1, a2, q->result);
             break;
         case QUAD_BLE:
-            fprintf(out, "    if ((%s) <= (%s)) goto L%s;\n", q->arg1, q->arg2, q->result);
+            fprintf(out, "    if ((%s) <= (%s)) goto L%s;\n", a1, a2, q->result);
             break;
         case QUAD_BE:
-            fprintf(out, "    if ((%s) == (%s)) goto L%s;\n", q->arg1, q->arg2, q->result);
+            fprintf(out, "    if ((%s) == (%s)) goto L%s;\n", a1, a2, q->result);
             break;
         case QUAD_BNE:
-            fprintf(out, "    if ((%s) != (%s)) goto L%s;\n", q->arg1, q->arg2, q->result);
+            fprintf(out, "    if ((%s) != (%s)) goto L%s;\n", a1, a2, q->result);
             break;
 
         /* --- Fonctions mathématiques --- */
         case QUAD_SIN:
-            fprintf(out, "    %s = sin((double)(%s));\n", q->result, q->arg1);
+            fprintf(out, "    %s = sin((double)(%s));\n", q->result, a1);
             break;
         case QUAD_COS:
-            fprintf(out, "    %s = cos((double)(%s));\n", q->result, q->arg1);
+            fprintf(out, "    %s = cos((double)(%s));\n", q->result, a1);
             break;
         case QUAD_EXP:
-            fprintf(out, "    %s = exp((double)(%s));\n", q->result, q->arg1);
+            fprintf(out, "    %s = exp((double)(%s));\n", q->result, a1);
             break;
         case QUAD_LOG:
-            fprintf(out, "    %s = log((double)(%s));\n", q->result, q->arg1);
+            fprintf(out, "    %s = log((double)(%s));\n", q->result, a1);
             break;
-        case QUAD_SQRT:
-            fprintf(out, "    %s = sqrt((double)(%s));\n", q->result, q->arg1);
+        case QUAD_SQRT: {
+            DataType t1 = resolve_type(q->arg1, table, tmap);
+            if (t1 == TYPE_C) {
+                fprintf(out, "    %s = csqrt(%s);\n", q->result, a1);
+            } else {
+                fprintf(out, "    %s = sqrt((double)(%s));\n", q->result, a1);
+            }
             break;
-        case QUAD_ABS:
-            fprintf(out, "    %s = fabs((double)(%s));\n", q->result, q->arg1);
+        }
+        case QUAD_ABS: {
+            DataType t1 = resolve_type(q->arg1, table, tmap);
+            if (t1 == TYPE_C) {
+                fprintf(out, "    %s = cabs(%s);\n", q->result, a1);
+            } else {
+                fprintf(out, "    %s = fabs((double)(%s));\n", q->result, a1);
+            }
             break;
+        }
         case QUAD_FLOOR:
-            fprintf(out, "    %s = floor((double)(%s));\n", q->result, q->arg1);
+            fprintf(out, "    %s = floor((double)(%s));\n", q->result, a1);
             break;
         case QUAD_CEIL:
-            fprintf(out, "    %s = ceil((double)(%s));\n", q->result, q->arg1);
+            fprintf(out, "    %s = ceil((double)(%s));\n", q->result, a1);
             break;
         case QUAD_ROUND:
-            fprintf(out, "    %s = round((double)(%s));\n", q->result, q->arg1);
+            fprintf(out, "    %s = round((double)(%s));\n", q->result, a1);
             break;
 
         case QUAD_RE:
+            fprintf(out, "    %s = creal(%s);\n", q->result, a1);
+            break;
         case QUAD_IM:
+            fprintf(out, "    %s = cimag(%s);\n", q->result, a1);
+            break;
         case QUAD_ARG:
-            fprintf(out, "    /* TODO etape 6 : nombres complexes non geres */\n");
-            fprintf(out, "    %s = 0.0;\n", q->result);
+            fprintf(out, "    %s = carg(%s);\n", q->result, a1);
             break;
 
         /* --- Fonctions chaînes --- */
@@ -467,13 +535,13 @@ static void translate_quad(FILE* out, const Quadruplet* q, SymbolTable* table, T
             fprintf(out,
                 "    %s = strdup(%s);\n"
                 "    for (char* p = %s; *p; p++) *p = (char)toupper((unsigned char)*p);\n",
-                q->result, q->arg1, q->result);
+                q->result, a1, q->result);
             break;
         case QUAD_MINUSCULES:
             fprintf(out,
                 "    %s = strdup(%s);\n"
                 "    for (char* p = %s; *p; p++) *p = (char)tolower((unsigned char)*p);\n",
-                q->result, q->arg1, q->result);
+                q->result, a1, q->result);
             break;
 
         /* --- Entrées / sorties --- */
@@ -487,20 +555,23 @@ static void translate_quad(FILE* out, const Quadruplet* q, SymbolTable* table, T
         }
         case QUAD_WRITE: {
             DataType t = resolve_type(q->arg1, table, tmap);
-            emit_write(out, q->arg1, t);
+            emit_write(out, a1, t);
             break;
         }
         case QUAD_WRITELN:
             fprintf(out, "    printf(\"\\n\");\n");
             break;
 
-        /* --- Fonctions (traitées plus tard, etape 4) --- */
         case QUAD_RETURN:
-            fprintf(out, "    return %s;\n", q->arg1 ? q->arg1 : "0");
+            fprintf(out, "    return %s;\n", a1 ? a1 : "0");
             break;
         case QUAD_PARAM:
+            fprintf(out, "    /* PARAM %s (utilise par le CALL suivant) */\n", a1 ? a1 : "");
+            break;
         case QUAD_CALL:
-            fprintf(out, "    /* TODO etape 4 : appels de fonctions non geres */\n");
+            fprintf(out, "    %s%s%s(%s);\n",
+                    q->result ? q->result : "", q->result ? " = " : "",
+                    q->arg1 ? q->arg1 : "", q->arg2 ? q->arg2 : "");
             break;
 
         case QUAD_LABEL:
@@ -512,6 +583,9 @@ static void translate_quad(FILE* out, const Quadruplet* q, SymbolTable* table, T
             fprintf(out, "    /* TODO : quadruplet non traduit (%s) */\n", quadOpToString(q->op));
             break;
     }
+
+    free(a1);
+    free(a2);
 }
 
 /* ========================================================= */
@@ -534,7 +608,8 @@ void generate_c_code(FILE* out, QuadList* list, SymbolTable* table) {
     fprintf(out, "#include <string.h>\n");
     fprintf(out, "#include <math.h>\n");
     fprintf(out, "#include <ctype.h>\n");
-    fprintf(out, "#include <stdbool.h>\n\n");
+    fprintf(out, "#include <stdbool.h>\n");
+    fprintf(out, "#include <complex.h>\n\n");
     fprintf(out, "int main(void) {\n");
 
     emit_declarations(out, table, &tmap);
