@@ -4,6 +4,7 @@
 #include <string.h>
 
 static SemanticErrorMode error_mode = SEMANTIC_FATAL;
+static int semantic_error_count = 0;
 
 /* ========================================================= */
 /* UTILITAIRES                                               */
@@ -386,6 +387,7 @@ bool check_comparable_types(DataType left, DataType right) {
 /* ========================================================= */
 
 void semantic_error(const char* msg, int line, int col) {
+    semantic_error_count++;
     fprintf(stderr, "ERREUR [%d:%d] %s\n", line, col, msg);
     if (error_mode == SEMANTIC_FATAL)
     exit(EXIT_FAILURE);
@@ -396,12 +398,14 @@ void semantic_warning(const char* msg, int line, int col) {
 }
 
 void error_undeclared_symbol(const char* name, int line, int col) {
+    semantic_error_count++;
     fprintf(stderr, "ERREUR [%d:%d] symbole '%s' non déclaré\n", line, col, name);
     if (error_mode == SEMANTIC_FATAL)
     exit(EXIT_FAILURE);
 }
 
 void error_redeclared_symbol(const char* name, int line, int col, int prev_line) {
+    semantic_error_count++;
     if (prev_line > 0) {
         fprintf(stderr,
                 "ERREUR [%d:%d] symbole '%s' déjà déclaré (ligne %d)\n",
@@ -416,6 +420,7 @@ void error_redeclared_symbol(const char* name, int line, int col, int prev_line)
 }
 
 void error_type_mismatch(DataType expected, DataType found, int line, int col) {
+    semantic_error_count++;
     fprintf(stderr,
             "ERREUR [%d:%d] type attendu %s, trouvé %s\n",
             line, col,
@@ -426,14 +431,13 @@ void error_type_mismatch(DataType expected, DataType found, int line, int col) {
 }
 
 void error_uninitialized_variable(const char* name, int line, int col) {
-    fprintf(stderr,
-            "ERREUR [%d:%d] variable '%s' utilisée avant initialisation\n",
-            line, col, name);
-    if (error_mode == SEMANTIC_FATAL)
-    exit(EXIT_FAILURE);
+    char buffer[256];
+    snprintf(buffer, sizeof(buffer), "variable '%s' utilisée avant initialisation", name);
+    semantic_warning(buffer, line, col);
 }
 
 void error_const_assignment(const char* name, int line, int col) {
+    semantic_error_count++;
     fprintf(stderr,
             "ERREUR [%d:%d] tentative de modification de la constante '%s'\n",
             line, col, name);
@@ -443,6 +447,10 @@ void error_const_assignment(const char* name, int line, int col) {
 
 void set_semantic_error_mode(SemanticErrorMode mode) {
     error_mode = mode;
+}
+
+int get_semantic_error_count(void) {
+    return semantic_error_count;
 }
 
 

@@ -5,7 +5,7 @@
 # Fichiers générés par Flex
 lex.yy.c
 lex.yy.h
-
+output
 # Fichiers générés par Bison (pour plus tard)
 *.tab.c
 *.tab.h

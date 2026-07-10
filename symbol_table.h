@@ -241,5 +241,6 @@ typedef enum {
 } SemanticErrorMode;
 
 void set_semantic_error_mode(SemanticErrorMode mode);
+int get_semantic_error_count(void);
 
 #endif /* SYMBOL_TABLE_H */
