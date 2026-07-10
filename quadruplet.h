@@ -180,7 +180,8 @@ extern IntStack elseStack;      // Pour les BR à compléter
 
 // Piles pour WHILE
 extern IntStack whileStartStack;    // Indices de début de boucle
-extern IntStack whileExitStack;     // BZ de sortie à compléter
+extern IntStack whileExitStack; 
+extern IntStack whileBreakStack;    // BZ de sortie à compléter
 
 // Piles pour FOR
 extern IntStack forStartStack;      // Indices de début de boucle
@@ -191,6 +192,8 @@ extern IntStack forContinueStack;   // BR générés par CONTINUER
 
 // Piles pour REPEAT
 extern IntStack repeatStartStack;   // Indices de début de boucle
+extern IntStack repeatBreakStack;    // BZ de sortie à compléter
+
 
 // Initialisation des piles globales
 void initControlStacks(void);

@@ -22,6 +22,8 @@ IntStack forIncrStack;
 IntStack forBreakStack;    // Pile dédiée pour les BR générés par SORTIR dans les boucles
 IntStack forContinueStack; // Pile dédiée pour les BR générés par CONTINUER dans les boucles
 IntStack repeatStartStack;
+IntStack whileBreakStack;
+IntStack repeatBreakStack;
 
 /* ========================================================= */
 /*                   GESTION DES QUADRUPLETS                  */
@@ -337,6 +339,8 @@ void initControlStacks(void) {
     initIntStack(&forBreakStack);
     initIntStack(&forContinueStack);
     initIntStack(&repeatStartStack);
+    initIntStack(&whileBreakStack);
+    initIntStack(&repeatBreakStack);
 }
 
 /* ========================================================= */

@@ -6,7 +6,7 @@ LDFLAGS = -lm
 
 PARSER = parser
 
-SRCS = symbol_table.c quadruplet.c codegen_c.c
+SRCS = symbol_table.c quadruplet.c codegen_c.c function_table.c
 
 all: $(PARSER)
 

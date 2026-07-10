@@ -6,6 +6,7 @@
 #include "quadruplet.h"
 #include "expr_info.h"
 #include "codegen_c.h"
+#include "function_table.h"
 
 extern int yylex();
 extern int line_num;
@@ -63,6 +64,30 @@ static void pop_function_context(void) {
     }
 }
 
+#define MAX_CALL_CONTEXT 64
+static FunctionInfo* call_context_stack[MAX_CALL_CONTEXT];
+static int call_arg_index_stack[MAX_CALL_CONTEXT];
+static int call_context_top = -1;
+
+static void push_call_context(FunctionInfo* fi) {
+    if (call_context_top + 1 >= MAX_CALL_CONTEXT) return;
+    call_context_top++;
+    call_context_stack[call_context_top] = fi;
+    call_arg_index_stack[call_context_top] = 0;
+}
+static FunctionInfo* current_call_fn(void) {
+    return (call_context_top >= 0) ? call_context_stack[call_context_top] : NULL;
+}
+static int current_call_arg_index(void) {
+    return (call_context_top >= 0) ? call_arg_index_stack[call_context_top] : 0;
+}
+static void advance_call_arg(void) {
+    if (call_context_top >= 0) call_arg_index_stack[call_context_top]++;
+}
+static void pop_call_context(void) {
+    if (call_context_top >= 0) call_context_top--;
+}
+
 
 char* expr_to_addr(ExprInfo e) {
     // Si c'est une comparaison qui n'a pas encore généré son temporaire
@@ -92,6 +117,39 @@ char* expr_to_addr(ExprInfo e) {
     char* copy = malloc(strlen(e.addr) + 1);
     if (copy) strcpy(copy, e.addr);
     return copy;
+}
+
+/* Emet le(s) quadruplet(s) d'appel pour "name", une fois les arguments
+ * empiles via QUAD_PARAM. Retourne l'adresse du resultat (temporaire, a
+ * liberer par l'appelant) si c'est une fonction, NULL sinon (procedure,
+ * ou erreur). *out_type recoit le type de retour (TYPE_ERROR si erreur).
+ * *out_error vaut 1 si le symbole n'est pas une fonction/procedure connue.
+ */
+static char* finish_call(const char* name, int arg_count, DataType* out_type, int* out_error) {
+    FunctionInfo* fi = ft_find(name);
+    SymbolEntry* fn = global_symbol_table ? find_symbol(global_symbol_table, name) : NULL;
+    char argcount_str[16];
+    sprintf(argcount_str, "%d", arg_count);
+
+    *out_error = 0;
+    if (out_type) *out_type = TYPE_ERROR;
+
+    if (!fn || (fn->category != SYMBOL_FUNCTION && fn->category != SYMBOL_PROCEDURE) || !fi) {
+        *out_error = 1;
+        return NULL;
+    }
+    if (arg_count != fi->param_count) {
+        semantic_error("Nombre d'arguments incorrect", line_num, col_num);
+    }
+    if (fi->is_function) {
+        char* t = newTemp();
+        createQuad(quadList, QUAD_CALL, (char*)name, argcount_str, t);
+        if (out_type) *out_type = fi->return_type;
+        return t;
+    } else {
+        createQuad(quadList, QUAD_CALL, (char*)name, argcount_str, NULL);
+        return NULL;
+    }
 }
 
 /* Génère un branchement conditionnel optimisé 
@@ -188,7 +246,7 @@ typedef struct YYLTYPE {
 /* Types non-terminaux */
 %type <datatype> type type_base type_arrow
 %type <expr_info> expression expr_or expr_xor expr_and expr_cmp expr_add expr_mul expr_unary primaire expr_pow
-
+%type <intval> liste_args
 
 
 /* ===================== */
@@ -372,44 +430,81 @@ type_base
 /* FONCTIONS             */
 /* ===================== */
 declaration_fonction
-    : TOK_FONCTION TOK_ID TOK_LPAREN { if (global_symbol_table) enter_scope(global_symbol_table); push_function_context(SYMBOL_FUNCTION); } TOK_RPAREN TOK_COLON type { set_function_return_type($7); } bloc TOK_FIN {
+    : TOK_FONCTION TOK_ID TOK_LPAREN {
         if (global_symbol_table) {
-            exit_scope(global_symbol_table);
-            add_symbol(global_symbol_table, $2, SYMBOL_FUNCTION, TYPE_FUNCTION, SUBTYPE_DEFAULT, @2.first_line, @2.first_column);
+            add_symbol(global_symbol_table, $2, SYMBOL_FUNCTION, TYPE_FUNCTION,
+                       SUBTYPE_DEFAULT, @2.first_line, @2.first_column);
+            enter_scope(global_symbol_table);
         }
+        push_function_context(SYMBOL_FUNCTION);
+        ft_begin($2, 1);
+    } TOK_RPAREN TOK_COLON type {
+        set_function_return_type($7);
+        ft_set_return_type($7);
+        ft_set_quad_start(nextQuad(quadList));
+    } bloc TOK_FIN {
+        if (global_symbol_table) exit_scope(global_symbol_table);
         if (!function_return_seen()) {
             semantic_warning("fonction sans return", @2.first_line, @2.first_column);
         }
+        ft_end(nextQuad(quadList));
         pop_function_context();
-        if ($2) {  free($2); }
+        if ($2) { free($2); }
     }
-    | TOK_FONCTION TOK_ID TOK_LPAREN { if (global_symbol_table) enter_scope(global_symbol_table); push_function_context(SYMBOL_FUNCTION); } parametres TOK_RPAREN TOK_COLON type { set_function_return_type($8); } bloc TOK_FIN {
+    | TOK_FONCTION TOK_ID TOK_LPAREN {
         if (global_symbol_table) {
-            exit_scope(global_symbol_table);
-            add_symbol(global_symbol_table, $2, SYMBOL_FUNCTION, TYPE_FUNCTION, SUBTYPE_DEFAULT, @2.first_line, @2.first_column);
+            add_symbol(global_symbol_table, $2, SYMBOL_FUNCTION, TYPE_FUNCTION,
+                       SUBTYPE_DEFAULT, @2.first_line, @2.first_column);
+            enter_scope(global_symbol_table);
         }
+        push_function_context(SYMBOL_FUNCTION);
+        ft_begin($2, 1);
+    } parametres TOK_RPAREN TOK_COLON type {
+        set_function_return_type($8);
+        ft_set_return_type($8);
+        ft_set_quad_start(nextQuad(quadList));
+    } bloc TOK_FIN {
+        if (global_symbol_table) exit_scope(global_symbol_table);
         if (!function_return_seen()) {
             semantic_warning("fonction sans return", @2.first_line, @2.first_column);
         }
+        ft_end(nextQuad(quadList));
         pop_function_context();
         if ($2) { free($2); }
     }
     ;
 
 declaration_procedure
-    : TOK_PROCEDURE TOK_ID TOK_LPAREN { if (global_symbol_table) enter_scope(global_symbol_table); push_function_context(SYMBOL_PROCEDURE); } TOK_RPAREN bloc TOK_FIN {
+    : TOK_PROCEDURE TOK_ID TOK_LPAREN {
         if (global_symbol_table) {
-            exit_scope(global_symbol_table);
-            add_symbol(global_symbol_table, $2, SYMBOL_PROCEDURE, TYPE_VOID, SUBTYPE_DEFAULT, @2.first_line, @2.first_column);
+            add_symbol(global_symbol_table, $2, SYMBOL_PROCEDURE, TYPE_VOID,
+                       SUBTYPE_DEFAULT, @2.first_line, @2.first_column);
+            enter_scope(global_symbol_table);
         }
+        push_function_context(SYMBOL_PROCEDURE);
+        ft_begin($2, 0);
+        ft_set_return_type(TYPE_VOID);
+        ft_set_quad_start(nextQuad(quadList));
+    } TOK_RPAREN bloc TOK_FIN {
+        if (global_symbol_table) exit_scope(global_symbol_table);
+        ft_end(nextQuad(quadList));
         pop_function_context();
-        if ($2) {  free($2); }
+        if ($2) { free($2); }
     }
-    | TOK_PROCEDURE TOK_ID TOK_LPAREN { if (global_symbol_table) enter_scope(global_symbol_table); push_function_context(SYMBOL_PROCEDURE); } parametres TOK_RPAREN bloc TOK_FIN {
+    | TOK_PROCEDURE TOK_ID TOK_LPAREN {
         if (global_symbol_table) {
-            exit_scope(global_symbol_table);
-            add_symbol(global_symbol_table, $2, SYMBOL_PROCEDURE, TYPE_VOID, SUBTYPE_DEFAULT, @2.first_line, @2.first_column);
+            add_symbol(global_symbol_table, $2, SYMBOL_PROCEDURE, TYPE_VOID,
+                       SUBTYPE_DEFAULT, @2.first_line, @2.first_column);
+            enter_scope(global_symbol_table);
         }
+        push_function_context(SYMBOL_PROCEDURE);
+        ft_begin($2, 0);
+        ft_set_return_type(TYPE_VOID);
+    } parametres TOK_RPAREN {
+        ft_set_quad_start(nextQuad(quadList));
+    } bloc TOK_FIN {
+        if (global_symbol_table) exit_scope(global_symbol_table);
+        ft_end(nextQuad(quadList));
         pop_function_context();
         if ($2) { free($2); }
     }
@@ -423,10 +518,12 @@ parametres
 parametre
     : TOK_ID TOK_COLON type {
         if (global_symbol_table) {
-            add_symbol(global_symbol_table, $1, SYMBOL_PARAMETER, $3, SUBTYPE_DEFAULT, @1.first_line, @1.first_column);
+            add_symbol(global_symbol_table, $1, SYMBOL_PARAMETER, $3, SUBTYPE_DEFAULT,
+                       @1.first_line, @1.first_column);
             SymbolEntry* entry = find_symbol(global_symbol_table, $1);
             if (entry) mark_symbol_initialized(entry);
         }
+        ft_add_param($3, $1);
         if ($1) { free($1); }
     }
     ;
@@ -446,6 +543,7 @@ liste_instructions
 
 instruction
     : affectation
+    | instruction_appel
     | instruction_si
     | instruction_tant_que
     | instruction_pour
@@ -466,21 +564,17 @@ instruction
         free(ret_addr);
         if ($2.addr) { free($2.addr); $2.addr = NULL; }
     }
-    | TOK_SORTIR {
-        // BREAK : sortir de la boucle courante
-        // Générer un BR avec destination inconnue
-        createQuad(quadList, QUAD_BR, NULL, NULL, "");
-        // Empiler dans la pile dédiée au break
-        if (!isIntStackEmpty(&whileExitStack)) {
-            // Dans une boucle WHILE
-            pushInt(&whileExitStack, nextQuad(quadList) - 1);
-        } else if (!isIntStackEmpty(&forStartStack)) {
-            // Dans une boucle FOR : empiler dans forBreakStack
-            pushInt(&forBreakStack, nextQuad(quadList) - 1);
-        } else if (!isIntStackEmpty(&repeatStartStack)) {
-            // Dans une boucle REPEAT
-            pushInt(&repeatStartStack, nextQuad(quadList) - 1);
-        }
+ | TOK_SORTIR {
+    createQuad(quadList, QUAD_BR, NULL, NULL, "");
+    int br_index = nextQuad(quadList) - 1;
+    if (!isIntStackEmpty(&whileStartStack)) {
+        pushInt(&whileBreakStack, br_index);
+    } else if (!isIntStackEmpty(&forStartStack)) {
+        pushInt(&forBreakStack, br_index);
+    } else if (!isIntStackEmpty(&repeatStartStack)) {
+        pushInt(&repeatBreakStack, br_index);
+    }
+
     }
     | TOK_CONTINUER {
         // CONTINUE : revenir au début de la boucle
@@ -503,6 +597,25 @@ instruction
             createQuad(quadList, QUAD_BR, NULL, NULL, start_addr);
         }
     }
+
+instruction_appel
+    : TOK_ID TOK_LPAREN {
+        push_call_context(ft_find($1));
+    } liste_args TOK_RPAREN {
+        pop_call_context();
+        int is_error;
+        DataType rtype;
+        char* result_addr = finish_call($1, $4, &rtype, &is_error);
+
+        if (is_error) {
+            error_undeclared_symbol($1, @1.first_line, @1.first_column);
+        }
+        /* Que ce soit une fonction ou une procedure, le resultat (s'il
+           existe) est simplement ignore : c'est un appel-instruction. */
+        if (result_addr) free(result_addr);
+        free($1);
+    }
+    ;
 
 /* ===================== */
 /* AFFECTATION           */
@@ -649,6 +762,10 @@ instruction_tant_que
         char exit_addr[16];
         sprintf(exit_addr, "%d", nextQuad(quadList));
         updateQuad(quadList, bz_index, exit_addr);
+         while (!isIntStackEmpty(&whileBreakStack)) {
+        int br_index = popInt(&whileBreakStack);
+        updateQuad(quadList, br_index, exit_addr);
+    }
     }
     ;
 
@@ -815,6 +932,13 @@ instruction_repeter
         
         // Compléter le branchement pour pointer vers le début de la boucle
         updateQuad(quadList, branch_index, start_addr);
+
+        char exit_addr[16];
+    sprintf(exit_addr, "%d", nextQuad(quadList));
+    while (!isIntStackEmpty(&repeatBreakStack)) {
+        int br_index = popInt(&repeatBreakStack);
+        updateQuad(quadList, br_index, exit_addr);
+    }
     }
     ;
 
@@ -861,6 +985,40 @@ liste_expressions
             createQuad(quadList, QUAD_WRITE, addr, NULL, NULL);
             free(addr);
         }
+    }
+    ;
+
+liste_args
+    : /* vide */ { $$ = 0; }
+    | expression {
+        FunctionInfo* fi = current_call_fn();
+        if (fi && current_call_arg_index() < fi->param_count) {
+            if (!check_type_compatibility(fi->params[current_call_arg_index()].type, $1.type)) {
+                error_type_mismatch(fi->params[current_call_arg_index()].type, $1.type,
+                                    @1.first_line, @1.first_column);
+            }
+        }
+        advance_call_arg();
+        char* addr = expr_to_addr($1);
+        createQuad(quadList, QUAD_PARAM, addr, NULL, NULL);
+        free(addr);
+        if ($1.addr) { free($1.addr); $1.addr = NULL; }
+        $$ = 1;
+    }
+    | liste_args TOK_COMMA expression {
+        FunctionInfo* fi = current_call_fn();
+        if (fi && current_call_arg_index() < fi->param_count) {
+            if (!check_type_compatibility(fi->params[current_call_arg_index()].type, $3.type)) {
+                error_type_mismatch(fi->params[current_call_arg_index()].type, $3.type,
+                                    @3.first_line, @3.first_column);
+            }
+        }
+        advance_call_arg();
+        char* addr = expr_to_addr($3);
+        createQuad(quadList, QUAD_PARAM, addr, NULL, NULL);
+        free(addr);
+        if ($3.addr) { free($3.addr); $3.addr = NULL; }
+        $$ = $1 + 1;
     }
     ;
 
@@ -1252,7 +1410,7 @@ primaire
         $$.cmp_left = NULL;
         $$.cmp_right = NULL;
     }
-       | TOK_ID {
+    | TOK_ID {
         if (global_symbol_table) {
             SymbolEntry* entry = find_symbol(global_symbol_table, $1);
             if (!entry) {
@@ -1446,6 +1604,35 @@ primaire
         $$.addr = t;
         free(arg_addr);
     }
+    | TOK_ID TOK_LPAREN {
+        push_call_context(ft_find($1));
+    } liste_args TOK_RPAREN {
+        pop_call_context();
+        int is_error;
+        DataType rtype;
+        char* result_addr = finish_call($1, $4, &rtype, &is_error);
+
+        if (is_error) {
+            error_undeclared_symbol($1, @1.first_line, @1.first_column);
+            $$.type = TYPE_ERROR;
+            $$.addr = NULL;
+        } else if (result_addr == NULL) {
+            /* C'etait une procedure : interdit dans une expression */
+            semantic_error("Une procedure ne peut pas etre utilisee comme expression",
+                           @1.first_line, @1.first_column);
+            $$.type = TYPE_ERROR;
+            $$.addr = strdup("0");
+        } else {
+            $$.type = rtype;
+            $$.addr = result_addr;
+        }
+        $$.symbol = NULL;
+        $$.is_literal = 0;
+        $$.cmp_op = CMP_NONE;
+        $$.cmp_left = NULL;
+        $$.cmp_right = NULL;
+        free($1);
+    }
     ;
 
 
@@ -1552,6 +1739,7 @@ const char* token_name(int tok) {
         case TOK_ARG: return "TOK_ARG";
 
         case TOK_FONCTION: return "TOK_FONCTION";
+        case TOK_PROCEDURE: return "TOK_PROCEDURE";
 
         /* Fonctions chaînes */
         case TOK_MAJUSCULES: return "TOK_MAJUSCULES";
@@ -1577,11 +1765,11 @@ int main(int argc, char **argv) {
     int tok;
 
     /* Initialiser la table des symboles */
-    global_symbol_table = init_symbol_table();
-
-    /* INITIALISER LES QUADRUPLETS */
-    quadList = initQuadList();
-    initControlStacks();
+   global_symbol_table = init_symbol_table();
+   
+   quadList = initQuadList();
+   initControlStacks();
+   ft_reset();
 
     set_semantic_error_mode(SEMANTIC_NON_FATAL);
 
@@ -1657,10 +1845,13 @@ int main(int argc, char **argv) {
 
     printf("\n=== ANALYSE SYNTAXIQUE ===\n\n");
 
-    if (yyparse() == 0)
-        printf("Analyse syntaxique réussie\n");
-    else
-        printf("Analyse syntaxique échouée\n");
+    if (yyparse() == 0) {
+    printf("Analyse syntaxique réussie\n");
+} else {
+    fprintf(stderr, "Analyse syntaxique échouée. Génération C annulée.\n");
+    free_symbol_table(global_symbol_table);
+    return 1; // On s'arrête ici si la syntaxe est fausse !
+}
 
     fclose(yyin);
 
@@ -1671,11 +1862,15 @@ int main(int argc, char **argv) {
     printQuadruplets(quadList);
 
     if (get_semantic_error_count() == 0) {
-        FILE* out = fopen("output.c", "w");
-        generate_c_code(out, quadList, global_symbol_table);
-        fclose(out);
-        system("gcc output.c -lm -o output");
-        printf("\nCode C genere avec succes : output.c\n");
+        
+    FILE* out = fopen("output.c", "w");
+    int fcount;
+    FunctionInfo* funcs = ft_get_all(&fcount);
+    generate_c_code(out, quadList, global_symbol_table, funcs, fcount);
+    fclose(out);
+    system("gcc output.c -lm -o output");
+    printf("\nCode C genere avec succes : output.c\n");  
+
     } else {
         printf("\n%d erreur(s) semantique(s) detectee(s) : generation de code annulee.\n",
                get_semantic_error_count());

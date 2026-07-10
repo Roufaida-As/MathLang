@@ -42,9 +42,14 @@ NEWLINE     \n
 "ENREGISTREMENT"    { return TOK_ENREGISTREMENT; }
 
 "SI"        { return TOK_SI; }
+"si"        { return TOK_SI; }
 "ALORS"     { return TOK_ALORS; }
+"alors"     { return TOK_ALORS; }
 "SINON"     { return TOK_SINON; }
+"sinon"     { return TOK_SINON; }
 "FIN"       { return TOK_FIN; }
+"fin"       { return TOK_FIN; }
+
 
 "TANT"      { return TOK_TANT; }
 "QUE"       { return TOK_QUE; }
