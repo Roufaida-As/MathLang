@@ -847,6 +847,21 @@ void generate_c_code(FILE *out, QuadList *list, SymbolTable *table,
     ParamBuffer pb;
     pb_init(&pb);
 
+    /* --- Determine quels labels sont reellement des cibles de saut --- */
+    char *used_labels = calloc(list->count + 1, 1);
+    for (int i = 0; i < list->count; i++)
+    {
+        QuadOp op = list->quads[i].op;
+        if (op == QUAD_BR || op == QUAD_BZ || op == QUAD_BNZ ||
+            op == QUAD_BG || op == QUAD_BGE || op == QUAD_BL ||
+            op == QUAD_BLE || op == QUAD_BE || op == QUAD_BNE)
+        {
+            int target = atoi(list->quads[i].result);
+            if (target >= 0 && target <= list->count)
+                used_labels[target] = 1;
+        }
+    }
+
     /* --- Corps de chaque fonction/procedure --- */
     for (int f = 0; f < function_count; f++)
     {
@@ -875,10 +890,12 @@ void generate_c_code(FILE *out, QuadList *list, SymbolTable *table,
 
         for (int i = fi->quad_start; i < fi->quad_end && i < list->count; i++)
         {
-            fprintf(out, "L%d:;\n", i);
+            if (used_labels[i])
+                fprintf(out, "L%d:;\n", i);
             translate_quad(out, &list->quads[i], table, &tmap, &pb,fi);
         }
-        fprintf(out, "L%d:;\n", fi->quad_end);
+        if (used_labels[fi->quad_end])
+            fprintf(out, "L%d:;\n", fi->quad_end);
 
         if (fi->is_function)
         {
@@ -906,12 +923,15 @@ void generate_c_code(FILE *out, QuadList *list, SymbolTable *table,
     {
         if (owner[i] != -1)
             continue;
-        fprintf(out, "L%d:;\n", i);
+        if (used_labels[i])
+            fprintf(out, "L%d:;\n", i);
         translate_quad(out, &list->quads[i], table, &tmap, &pb,NULL);
     }
-    fprintf(out, "L%d:;\n", list->count);
+    if (used_labels[list->count])
+        fprintf(out, "L%d:;\n", list->count);
     fprintf(out, "    return 0;\n}\n");
 
+    free(used_labels);
     pb_free(&pb);
     free(owner);
     temp_map_free(&tmap);
