@@ -1,0 +1,31 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential flex bison
+
+      - name: Build
+        run: make
+
+      - name: Package binary
+        run: |
+          mkdir -p dist
+          cp parser dist/mathlang-parser-linux-x86_64
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/mathlang-parser-linux-x86_64
+          generate_release_notes: true
