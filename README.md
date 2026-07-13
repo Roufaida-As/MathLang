@@ -1,264 +1,113 @@
-# MathLang - Compilateur pour Langage Mathématique
+# MathLang
 
-##  Description
+MathLang est un langage de programmation pédagogique, à syntaxe française et orienté mathématiques, doté d'un compilateur complet écrit en C (lex/flex + yacc/bison) qui traduit le code MathLang en C, compile ce C avec `gcc`, puis exécute le binaire obtenu.
 
-**MathLang** est un compilateur complet pour un langage de programmation orienté vers les mathématiques. Le projet implémente les trois phases principales d'un compilateur :
+Le compilateur effectue les phases classiques :
 
-1. **Analyse Lexicale** - Reconnaissance des tokens
-2. **Analyse Syntaxique** - Vérification de la grammaire
-3. **Analyse Sémantique** - Vérification des types et génération de code intermédiaire
+1. **Analyse lexicale** (flex) — tokenisation avec suivi ligne/colonne
+2. **Analyse syntaxique** (bison) — construction de l'AST implicite via les règles de grammaire
+3. **Analyse sémantique** — vérification de types, gestion des portées, table des symboles, table des fonctions
+4. **Génération de code intermédiaire** — quadruplets
+5. **Génération de code C** — traduction des quadruplets en C, compilé avec `gcc -lm`
 
-Le compilateur génère du code intermédiaire sous forme de **quadruplets** pour une exécution ultérieure.
+## Fonctionnalités du langage
 
----
+- **Types** : `Z` (entier), `R` (réel), `B` (booléen), `Sigma` (chaîne), `Car` (caractère), `C` (complexe)
+- **Déclarations** : `SOIT x dans Z tel que x <- 42`, `SOIT_CONST PI dans R tel que PI <- 3.14159`
+- **Fonctions et procédures** : `FONCTION` (retourne une valeur), `PROCEDURE` (aucun retour), avec `RETOURNER`
+- **Contrôle de flux** : `SI / ALORS / SINON`, `TANT QUE / FAIRE`, `POUR ... DE ... A ... [PAR ...] FAIRE`, `REPETER / JUSQUA`, `SORTIR`, `CONTINUER`
+- **Opérateurs logiques** : `ET`, `OU`, `NON`, `XOR`, implication et équivalence
+- **Fonctions mathématiques intégrées** : `sin`, `cos`, `exp`, `log`, `sqrt`, `abs`, `floor`, `ceil`, `round`, ainsi que `re`, `im`, `arg` pour les nombres complexes
+- **Opérations sur chaînes** : concaténation, `majuscules`, `minuscules`
+- **Entrées/sorties** : `AFFICHER`, `AFFICHER_LIGNE`, `LIRE`
+- **Détection d'erreurs sémantiques** : types incompatibles, constantes modifiées, variables non déclarées, portées de boucle, division par zéro, domaines mathématiques invalides, etc.
 
-##  Fonctionnalités
-
-### Types de Données Supportés
-- **Z** - Entiers (int8, int16, int32, int64)
-- **R** - Nombres réels (float, double)
-- **B** - Booléens (vrai/faux)
-- **C** - Nombres complexes
-- **Σ (Sigma)** - Chaînes de caractères
-- **Char** - Caractères
-
-### Structures de Contrôle
-- **IF/ELSE/ELSE-IF** - Conditionnelles avec branchements
-- **WHILE** - Boucles indéterminées
-- **FOR** - Boucles déterminées (3 variantes)
-- **REPEAT/UNTIL** - Boucles post-testées
-- **BREAK/CONTINUE** - Contrôle de flux
-
-### Opérations Mathématiques
-- Arithmétique : `+`, `-`, `*`, `/`, `div`, `mod`, `^`
-- Comparaisons : `=`, `≠`, `<`, `>`, `≤`, `≥`
-- Logiques : `et`, `ou`, `xor`, `non`
-- Fonctions : `sin`, `cos`, `exp`, `log`, `sqrt`, `abs`, `floor`, `ceil`, `round`
-- Complexes : `re` (partie réelle), `im` (partie imaginaire), `arg` (argument)
-- Chaînes : `majuscules`, `minuscules`
-
-### I/O
-- `AFFICHER(expr)` - Affichage simple
-- `AFFICHER_LIGNE(expr)` - Affichage avec nouvelle ligne
-- `LIRE(var)` - Lecture depuis l'entrée
-
-### Déclarations
-```mathlang
-SOIT x dans Z tel que x <- 5
-SOIT_CONST PI dans R tel que PI <- 3.14159
-```
-
----
-
-##  Structure du Projet
+## Exemple
 
 ```
-MathLang/
-├── mathlang.y                    # Grammaire Bison (syntaxe + sémantique)
-├── mathlang.l                    # Lexique Flex
-├── symbol_table.h/c              # Gestion de la table des symboles
-├── quadruplet.h/c                # Génération de code intermédiaire
-├── expr_info.h                   # Structure info expression
-├── Analyse_lexicale_manuelle.c   # Analyseur lexical manuel (AFN/AFD)
-├── Makefile                      # Compilation du projet
-├── tests/                        # Suite de tests
-│   ├── test_b_simple.ml
-│   ├── test_bc_complet.ml
-│   ├── TEST_FINAL_COMPLET.ml
-│   └── ...
-├── Analyse_syntaxique_man/       # Analyse syntaxique manuelle
-│   ├── Analyse_syntaxique_manuelle.c
-│   ├── test1.ml - test4.ml
-│   └── ...
-└── README.md              
+FONCTION factorielle(n : Z) : Z
+    SI n <= 1 ALORS
+        RETOURNER 1
+    SINON
+        RETOURNER n * factorielle(n - 1)
+    FIN
+FIN
+
+PROCEDURE afficher_titre(titre : Sigma)
+    AFFICHER_LIGNE(titre)
+    AFFICHER("-------------------------")
+    AFFICHER_LIGNE("")
+FIN
 ```
 
----
+## Prérequis
 
-##  Compilation et Exécution
+- `gcc`
+- `flex`
+- `bison`
+- `make`
 
-### Prérequis
-- GCC ou Clang
-- Flex (scanner lexical)
-- Bison (analyseur syntaxique)
-- Make
-
-### Compilation rapide (Makefile)
-
-Un `Makefile` a été ajouté pour automatiser la génération du scanner/parser, la compilation et l'exécution des tests.
-
-Commandes principales:
-
-```
-make        # génère le binaire ./parser
-make test   # exécute ./parser sur tous les fichiers dans tests/
-make memcheck # exécute valgrind (si présent) sur la suite principale
-make clean  # nettoie les fichiers générés
+Sous Ubuntu/Debian :
+```bash
+sudo apt-get update
+sudo apt-get install -y build-essential flex bison
 ```
 
-Une action GitHub CI est fournie dans `.github/workflows/ci.yml` pour compiler, exécuter les tests et lancer une vérification mémoire automatique.
-
-
----
-
-##  Analyse Détaillée
-
-### Phase 1 : Analyse Lexicale (`mathlang.l`)
-
-Le lexeur reconnaît :
-- **Mots-clés** : SOIT, ALORS, POUR, etc.
-- **Identificateurs** : [a-zA-Z_][a-zA-Z0-9_]*
-- **Littéraux** : entiers, réels, complexes, chaînes, caractères
-- **Opérateurs** : arithmétiques, logiques, de comparaison
-- **Commentaires** : # ...
-
-### Phase 2 : Analyse Syntaxique (`mathlang.y`)
-
-La grammaire Bison valide :
-- Déclarations de variables et constantes
-- Types (simples et complexes)
-- Expressions (avec priorité correcte)
-- Instructions (if, while, for, repeat)
-- Appels de fonction
-
-### Phase 3 : Analyse Sémantique
-
-Vérifications effectuées :
-- **Symboles** : déclaration, redéclaration, utilisation
-- **Types** : compatibilité d'affectation, opérations valides
-- **Initialisation** : variables avant utilisation
-- **Constantes** : modification interdite
-
-### Code Intermédiaire
-
-Génération de **quadruplets** (opérateur, arg1, arg2, résultat) :
-
-```
-   0: ( :=     , 5         , -         , x        )
-   1: ( :=     , 3.14      , -         , y        )
-   2: ( +      , x         , 1         , T0       )
-   3: ( :=     , T0        , -         , x        )
-   4: ( BZ     , x         , 0         , 2        )
-```
-
----
-
-##  Table des Symboles
-
-La table des symboles gère :
-- **Catégories** : variable, constante, fonction, procédure
-- **Types** : Z, R, B, C, Σ, Char
-- **Portées** : scope globale et locale
-- **Attributs** : initialisé, constant, utilisé
-
-Sortie exemple :
-```
-=== SYMBOL TABLE (5 symbols) ===
-Name                 Category   Type       Scope  Const  Init   Used
-────────────────────────────────────────────────────────────────
-x                    VAR        Z          0      no     yes    yes
-PI                   CONST      R          0      yes    yes    no
-nom                  VAR        SIGMA      0      no     yes    yes
-```
-
----
-
-##  Tests
-
-### Fichier de Test
-
-- **TEST_FINAL_COMPLET.ml** - Suite complète
-
-### Exécution des Tests
+## Compilation
 
 ```bash
-./parser tests/TEST_FINAL_COMPLET.ml
+make
 ```
 
-Sortie complète incluant :
-1. Analyse lexicale (tous les tokens)
-2. Analyse syntaxique
-3. Table des symboles finale
-4. Code intermédiaire (quadruplets)
+Cela génère l'exécutable `parser` (analyseur lexical/syntaxique + générateur de code C).
 
+## Utilisation
 
----
-
-##  Gestion des Erreurs
-
-Le compilateur détecte et rapporte :
-
-### Erreurs Lexicales
-```
-Erreur lexicale à la ligne 1, colonne 5: caractère inconnu '§'
+```bash
+./parser mon_programme.ml
 ```
 
-### Erreurs Syntaxiques
-```
-Erreur syntaxique ligne 2 colonne 10 : ...
-```
+Le compilateur affiche successivement :
+- le résultat de l'analyse lexicale (table des tokens),
+- le résultat de l'analyse syntaxique,
+- la table des symboles,
+- la liste des quadruplets générés,
+- puis génère `output.c`, le compile (`gcc output.c -lm -o output`) et produit l'exécutable `output`.
 
-### Erreurs Sémantiques
-```
-ERREUR [3:15] symbole 'z' non déclaré
-ERREUR [4:10] type attendu Z, trouvé R
-ERREUR [5:8] tentative de modification de la constante 'PI'
-```
+S'il y a des erreurs sémantiques, la génération de code est annulée et les erreurs sont listées.
 
----
+## Tests
 
-##  Références Techniques
-
-### Grammaire BNF Simplifiée
-
-```
-programme       := liste_declarations
-declaration     := declaration_variable | instruction
-type            := TOK_TYPE_Z | TOK_TYPE_R | TOK_TYPE_B | ...
-expression      := expr_or
-expr_or         := expr_or TOK_OR expr_xor | expr_xor
-instruction_si  := TOK_SI expression TOK_ALORS bloc partie_sinon_opt TOK_FIN
-instruction_pour := TOK_POUR TOK_ID TOK_DE expr TOK_A expr TOK_FAIRE bloc TOK_FIN
+```bash
+make test
 ```
 
-### Priorité des Opérateurs
+Ce qui exécute `scripts/run_tests.sh` : chaque fichier `.ml` du dossier `tests/` est compilé, le C généré est vérifié (compilation + exécution avec timeout), et un résumé pass/fail est affiché.
 
-1. `^` (puissance) - droite
-2. `-u`, `non` (unaire) - droite
-3. `*`, `/`, `div`, `mod` - gauche
-4. `+`, `-` - gauche
-5. `=`, `≠`, `<`, `>`, `≤`, `≥` - gauche
-6. `et` - gauche
-7. `xor` - gauche
-8. `ou` - gauche
-9. `<-` (affectation) - droite
+## Intégration continue
 
----
+- **`.github/workflows/ci.yml`** — build + tests à chaque push/pull request sur `main`
+- **`.github/workflows/release.yml`** — à chaque tag `v*` poussé, build le compilateur et publie le binaire Linux en tant que GitHub Release
 
-##  Contribution
+Pour publier une nouvelle release :
+```bash
+git tag v1.1
+git push origin v1.1
+```
 
-Pour améliorer le compilateur :
+## Structure du projet
 
-1. Étendre les types de données supportés
-2. Ajouter de nouvelles structures de contrôle
-3. Optimiser la génération de code
-4. Ajouter des passes d'optimisation
-5. Implémenter un back-end (LLVM, x86-64, etc.)
+```
+mathlang.y            # Grammaire bison (lexique + syntaxe + sémantique)
+codegen_c.c            # Génération du code C à partir des quadruplets
+function_table.c/.h    # Table des fonctions/procédures déclarées
+symbol_table.c/.h       # Table des symboles (variables, types, portées)
+quadruplet.c/.h         # Représentation et gestion des quadruplets
+tests/                  # Programmes MathLang de test
+scripts/run_tests.sh    # Script d'exécution des tests
+.github/workflows/      # Pipelines CI/CD
+```
 
----
+## Licence
 
-##  Licence
-
-Ce projet est un travail académique de compilation et traduction.
-
----
-
-##  Auteur
-
-ASBAR ROUFAIDA
-MAHMOUDI SAMEH
-ROUABHI MOUNIA HIBET ERRAHMANE
-
----
-
-**Dernière mise à jour** : 21/01/2026
+Ce projet est sous licence [MIT](LICENSE).
